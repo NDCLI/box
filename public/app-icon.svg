@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CVAT Box Counter icon">
+  <defs>
+    <radialGradient id="bg" cx="28%" cy="20%" r="88%">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.42" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#070a12"/>
+    </radialGradient>
+    <linearGradient id="box" x1="96" y1="112" x2="416" y2="400" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="0.55" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <path d="M82 178c0-53 43-96 96-96h156c53 0 96 43 96 96v156c0 53-43 96-96 96H178c-53 0-96-43-96-96V178Z" fill="#0f172a" opacity=".74"/>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <rect x="124" y="142" width="184" height="184" rx="24" stroke="url(#box)" stroke-width="28"/>
+    <rect x="204" y="206" width="184" height="184" rx="24" stroke="#f59e0b" stroke-width="28" opacity=".94"/>
+  </g>
+
+  <g fill="#f8fafc">
+    <circle cx="124" cy="142" r="15"/>
+    <circle cx="308" cy="142" r="15"/>
+    <circle cx="124" cy="326" r="15"/>
+    <circle cx="308" cy="326" r="15"/>
+    <circle cx="204" cy="206" r="15"/>
+    <circle cx="388" cy="206" r="15"/>
+    <circle cx="204" cy="390" r="15"/>
+    <circle cx="388" cy="390" r="15"/>
+  </g>
+
+  <path d="M256 88v336" stroke="#e0f2fe" stroke-width="10" stroke-linecap="round" opacity=".42" stroke-dasharray="20 22"/>
+  <text x="256" y="286" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="76" font-weight="900" fill="#ffffff" letter-spacing="-4">IoU</text>
+</svg>

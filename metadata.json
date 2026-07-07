@@ -1,0 +1,6 @@
+{
+  "name": "CVAT Duplicate Box Detector",
+  "description": "Kiểm tra và phát hiện các khung hình (bounding box) trùng lặp 100% trong file XML hoặc ZIP xuất bản từ CVAT, hỗ trợ lọc, xem chi tiết và tải báo cáo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
