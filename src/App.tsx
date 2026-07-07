@@ -669,7 +669,8 @@ export default function App() {
               <span style={{ color: '#34A853' }}>g</span>
               <span style={{ color: '#EA4335' }}>l</span>
               <span style={{ color: '#4285F4' }}>e</span>
-              <span style={{ color: '#000' }}> AI </span>
+              <span style={{ color: '#FBBC05' }}> A</span>
+              <span style={{ color: '#34A853' }}>I </span>
               <span style={{ color: '#4285F4' }}>S</span>
               <span style={{ color: '#EA4335' }}>t</span>
               <span style={{ color: '#FBBC05' }}>u</span>
