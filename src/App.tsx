@@ -662,7 +662,21 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            <h2 className="text-xl font-bold tracking-tight text-slate-900">Google AI Studio</h2>
+            <h2 className="text-xl font-bold tracking-tight">
+              <span style={{ color: '#4285F4' }}>G</span>
+              <span style={{ color: '#EA4335' }}>o</span>
+              <span style={{ color: '#FBBC05' }}>o</span>
+              <span style={{ color: '#34A853' }}>g</span>
+              <span style={{ color: '#EA4335' }}>l</span>
+              <span style={{ color: '#4285F4' }}>e</span>
+              <span style={{ color: '#000' }}> AI </span>
+              <span style={{ color: '#4285F4' }}>S</span>
+              <span style={{ color: '#EA4335' }}>t</span>
+              <span style={{ color: '#FBBC05' }}>u</span>
+              <span style={{ color: '#34A853' }}>d</span>
+              <span style={{ color: '#EA4335' }}>i</span>
+              <span style={{ color: '#4285F4' }}>o</span>
+            </h2>
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </div>
         </div>
