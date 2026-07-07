@@ -663,20 +663,20 @@ export default function App() {
           </div>
           <div className="flex items-center space-x-3">
             <h2 className="text-xl font-bold tracking-tight">
-              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>G</span>
-              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
-              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
-              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>g</span>
-              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>l</span>
-              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>e</span>
-              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}> A</span>
-              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>I </span>
-              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>S</span>
-              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>t</span>
-              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>u</span>
-              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>d</span>
-              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>i</span>
-              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
+              <span style={{ color: '#9BB8F7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>G</span>
+              <span style={{ color: '#F4A9A5', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>o</span>
+              <span style={{ color: '#FFE38A', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>o</span>
+              <span style={{ color: '#A0D5A7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>g</span>
+              <span style={{ color: '#F4A9A5', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>l</span>
+              <span style={{ color: '#9BB8F7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>e</span>
+              <span style={{ color: '#FFE38A', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}> A</span>
+              <span style={{ color: '#A0D5A7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>I </span>
+              <span style={{ color: '#9BB8F7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>S</span>
+              <span style={{ color: '#F4A9A5', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>t</span>
+              <span style={{ color: '#FFE38A', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>u</span>
+              <span style={{ color: '#A0D5A7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>d</span>
+              <span style={{ color: '#F4A9A5', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>i</span>
+              <span style={{ color: '#9BB8F7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>o</span>
             </h2>
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </div>
