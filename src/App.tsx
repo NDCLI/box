@@ -661,9 +661,9 @@ export default function App() {
               <h1 className="text-xl font-bold tracking-tight text-slate-900">CVAT Box Counter & Duplicate Inspector</h1>
             </div>
           </div>
-          <div className="flex items-center space-x-2 text-xs font-mono text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
-            <span>Server: Gemini API</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <div className="flex items-center space-x-3">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">Google AI Studio</h2>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </div>
         </div>
       </header>
