@@ -1,0 +1,26 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/cvat-duplicate-box-detector', '.']
+    
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/cvat-duplicate-box-detector']
+    
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'cvat-duplicate-box-detector'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/cvat-duplicate-box-detector'
+      - '--region'
+      - 'asia-southeast1'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+
+images:
+  - 'gcr.io/$PROJECT_ID/cvat-duplicate-box-detector'
