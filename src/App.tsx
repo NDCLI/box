@@ -1779,52 +1779,7 @@ export default function App() {
                         <div className="self-center flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400 bg-slate-900/60 px-4 py-2 rounded-full border border-slate-800 backdrop-blur-xs z-10">
                           <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-xs bg-sky-400 mr-1.5"></span>Label hiển thị trên box</span>
                           
-                          <span className="text-slate-700">|</span>
                           
-                          <div className="flex items-center space-x-2">
-                            <span className="text-slate-400">Ảnh nền:</span>
-                            <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded text-[10px] font-bold border border-slate-700 transition-colors flex items-center gap-1.5">
-                              <FileUp className="w-3.5 h-3.5" />
-                              <span>{currentImageSrc ? 'Thay đổi ảnh' : 'Tải tệp ảnh lẻ (.jpg/.png)'}</span>
-                              <input 
-                                type="file" 
-                                accept="image/*" 
-                                className="hidden" 
-                                onChange={(e) => {
-                                  if (e.target.files && e.target.files[0] && selectedFrameData) {
-                                    const imgFile = e.target.files[0];
-                                    const objectUrl = URL.createObjectURL(imgFile);
-                                    setManualImages(prev => {
-                                      // Revoke old URL if exists to avoid memory leak
-                                      if (prev[selectedFrameData.name]) {
-                                        URL.revokeObjectURL(prev[selectedFrameData.name]);
-                                      }
-                                      return {
-                                        ...prev,
-                                        [selectedFrameData.name]: objectUrl
-                                      };
-                                    });
-                                  }
-                                }}
-                              />
-                            </label>
-                            {selectedFrameData && manualImages[selectedFrameData.name] && (
-                              <button 
-                                onClick={() => {
-                                  setManualImages(prev => {
-                                    const updated = { ...prev };
-                                    URL.revokeObjectURL(updated[selectedFrameData.name]);
-                                    delete updated[selectedFrameData.name];
-                                    return updated;
-                                  });
-                                }}
-                                className="text-rose-500 hover:text-rose-400 font-bold text-[10px] underline"
-                                title="Xóa ảnh nền đã tải thủ công"
-                              >
-                                Xóa
-                              </button>
-                            )}
-                          </div>
                         </div>
 
                       </div>
