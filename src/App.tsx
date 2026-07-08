@@ -27,7 +27,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import JSZip from 'jszip';
+import { ZipReader, BlobReader, BlobWriter, TextWriter, Entry } from '@zip.js/zip.js';
 import { parseCVATXML, detectDuplicates, removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
 import { CVATDataset, DuplicateGroup, DetectionSettings, CVATBox } from './types';
 
@@ -40,7 +40,7 @@ export default function App() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // ZIP specific states
-  const [zipInstance, setZipInstance] = useState<JSZip | null>(null);
+  const [zipEntries, setZipEntries] = useState<Entry[] | null>(null);
   const [xmlFilesInZip, setXmlFilesInZip] = useState<string[]>([]);
   const [selectedXmlPath, setSelectedXmlPath] = useState<string>('');
 
@@ -48,6 +48,9 @@ export default function App() {
   const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageOpacity, setImageOpacity] = useState<number>(0.85); // Option to control brightness/opacity of image overlay
+  
+  // Manual image uploads mapping for single frame view
+  const [manualImages, setManualImages] = useState<Record<string, string>>({});
 
   // CVAT Dataset states
   const [xmlContent, setXmlContent] = useState<string>('');
@@ -104,10 +107,16 @@ export default function App() {
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // Trigger file browser
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleFolderUploadClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    folderInputRef.current?.click();
   };
 
   // Reset all state when new file starts uploading
@@ -115,7 +124,7 @@ export default function App() {
     setFile(null);
     setError(null);
     setSuccessMsg(null);
-    setZipInstance(null);
+    setZipEntries(null);
     setXmlFilesInZip([]);
     setSelectedXmlPath('');
     setXmlContent('');
@@ -131,13 +140,26 @@ export default function App() {
       URL.revokeObjectURL(currentImageSrc);
     }
     setCurrentImageSrc(null);
+
+    // Revoke manual images
+    setManualImages(prev => {
+      Object.keys(prev).forEach(key => {
+        const url = prev[key];
+        if (url) {
+          URL.revokeObjectURL(url);
+        }
+      });
+      return {};
+    });
   };
 
   // Handle file select
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      await processUploadedFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      await processUploadedFiles(e.target.files);
     }
+    // reset input so the same file/folder can be selected again
+    e.target.value = '';
   };
 
   // Drag and drop handlers
@@ -153,61 +175,121 @@ export default function App() {
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      await processUploadedFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processUploadedFiles(e.dataTransfer.files);
     }
   };
 
   // Main file processor
-  const processUploadedFile = async (uploadedFile: File) => {
+  const processUploadedFiles = async (files: FileList | File[]) => {
     resetState();
-    setFile(uploadedFile);
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
     setIsLoading(true);
 
     try {
-      const extension = uploadedFile.name.split('.').pop()?.toLowerCase();
-      if (extension === 'zip') {
-        // Load ZIP file
-        const zip = new JSZip();
-        const loadedZip = await zip.loadAsync(uploadedFile);
-        setZipInstance(loadedZip);
+      // Check if it's a directory upload (multiple files or has webkitRelativePath)
+      const isDirectoryUpload = fileArray.length > 1 || (fileArray[0].webkitRelativePath && fileArray[0].webkitRelativePath.includes('/'));
 
-        // Find all XML files
-        const xmlPaths: string[] = [];
-        loadedZip.forEach((relativePath) => {
-          if (relativePath.toLowerCase().endsWith('.xml') && !relativePath.startsWith('__MACOSX/')) {
-            xmlPaths.push(relativePath);
-          }
-        });
-
-        if (xmlPaths.length === 0) {
-          throw new Error('Không tìm thấy tệp tin XML nào trong tệp ZIP đã tải lên.');
+      if (isDirectoryUpload) {
+        // Handle directory upload
+        const xmlFiles = fileArray.filter(f => f.name.toLowerCase().endsWith('.xml') && !f.webkitRelativePath.includes('__MACOSX/'));
+        
+        if (xmlFiles.length === 0) {
+          throw new Error('Không tìm thấy tệp tin XML nào trong thư mục đã tải lên.');
         }
 
-        setXmlFilesInZip(xmlPaths);
-        // Default to the first XML found (commonly annotations.xml)
-        const defaultXml = xmlPaths.find(p => p.toLowerCase().includes('annotation')) || xmlPaths[0];
-        setSelectedXmlPath(defaultXml);
-
-        // Extract XML content
-        const content = await loadedZip.file(defaultXml)!.async('string');
-        setXmlContent(content);
-        setXmlFilename(defaultXml.split('/').pop() || defaultXml);
-      } else if (extension === 'xml') {
-        // Load XML file directly
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const content = e.target?.result as string;
+        // Use the first XML file found
+        const mainXmlFile = xmlFiles.find(f => f.name.toLowerCase().includes('annotation')) || xmlFiles[0];
+        setFile(mainXmlFile);
+        
+        try {
+          const content = await mainXmlFile.text();
           setXmlContent(content);
-          setXmlFilename(uploadedFile.name);
-        };
-        reader.onerror = () => {
-          setError('Không thể đọc tệp XML này.');
-          setIsLoading(false);
-        };
-        reader.readAsText(uploadedFile);
+          setXmlFilename(mainXmlFile.name);
+        } catch (err) {
+          throw new Error('Không thể đọc tệp XML này.');
+        }
+
+        // Cache object URLs for image files
+        const newManualImages: Record<string, string> = {};
+        fileArray.forEach(f => {
+          const ext = f.name.split('.').pop()?.toLowerCase();
+          if (ext && ['jpg', 'jpeg', 'png', 'bmp', 'webp'].includes(ext)) {
+            // Index by filename so we can look it up later
+            const objectUrl = URL.createObjectURL(f);
+            newManualImages[f.name] = objectUrl;
+          }
+        });
+        
+        setManualImages(newManualImages);
+
       } else {
-        throw new Error('Định dạng tệp không được hỗ trợ. Vui lòng tải lên tệp .XML hoặc .ZIP.');
+        // Handle single file upload
+        const uploadedFile = fileArray[0];
+        setFile(uploadedFile);
+        
+        const extension = uploadedFile.name.split('.').pop()?.toLowerCase();
+        if (extension === 'zip') {
+          let entries: Entry[] = [];
+          try {
+            const zipFileReader = new BlobReader(uploadedFile);
+            const zipReader = new ZipReader(zipFileReader);
+            entries = await zipReader.getEntries();
+            setZipEntries(entries);
+          } catch (zipErr: any) {
+            console.error("Lỗi nạp tệp ZIP:", zipErr);
+            const errorMsg = zipErr.message || String(zipErr);
+            if (errorMsg.toLowerCase().includes("could not be read") || errorMsg.toLowerCase().includes("permission") || errorMsg.includes("NotReadableError")) {
+              throw new Error(
+                `Trình duyệt bị từ chối quyền đọc tệp ZIP (Lỗi: ${errorMsg}).\n` +
+                `💡 Cách khắc phục:\n` +
+                `1. Hãy tải lên "Thư Mục (Folder)" đã giải nén thay vì tải lên tệp ZIP để tránh lỗi này và không bị tràn RAM.`
+              );
+            }
+            throw new Error(
+              `Không thể đọc tệp ZIP (Lỗi: ${errorMsg}).\n` +
+              `💡 Mẹo: Tệp tin ZIP có thể bị hỏng. Hãy giải nén ở máy và bấm nút "Tải Thư Mục" lên.`
+            );
+          }
+
+          const xmlPaths: string[] = [];
+          entries.forEach((entry) => {
+            const relativePath = entry.filename;
+            if (relativePath.toLowerCase().endsWith('.xml') && !relativePath.startsWith('__MACOSX/')) {
+              xmlPaths.push(relativePath);
+            }
+          });
+
+          if (xmlPaths.length === 0) {
+            throw new Error('Không tìm thấy tệp tin XML nào trong tệp ZIP đã tải lên.');
+          }
+
+          setXmlFilesInZip(xmlPaths);
+          const defaultXml = xmlPaths.find(p => p.toLowerCase().includes('annotation')) || xmlPaths[0];
+          setSelectedXmlPath(defaultXml);
+
+          const xmlEntry = entries.find(e => e.filename === defaultXml);
+          if (xmlEntry && (xmlEntry as any).getData) {
+            const content = await (xmlEntry as any).getData(new TextWriter());
+            setXmlContent(content);
+            setXmlFilename(defaultXml.split('/').pop() || defaultXml);
+          } else {
+             throw new Error('Không thể đọc file XML trong ZIP.');
+          }
+
+        } else if (extension === 'xml') {
+          try {
+            const content = await uploadedFile.text();
+            setXmlContent(content);
+            setXmlFilename(uploadedFile.name);
+          } catch (err) {
+            throw new Error('Không thể đọc tệp XML này.');
+          }
+        } else {
+          throw new Error('Định dạng tệp không được hỗ trợ. Vui lòng tải lên tệp .XML, .ZIP hoặc chọn cả Thư Mục (Folder).');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Đã xảy ra lỗi khi xử lý tệp.');
@@ -254,15 +336,21 @@ export default function App() {
 
   // Handle changing selected XML from ZIP
   const handleXmlPathChange = async (path: string) => {
-    if (!zipInstance) return;
+    if (!zipEntries) return;
     try {
       setIsLoading(true);
       setSelectedXmlPath(path);
-      const content = await zipInstance.file(path)!.async('string');
-      setXmlContent(content);
-      setXmlFilename(path.split('/').pop() || path);
-      setSelectedGroupId(null);
-      setCurrentPage(1);
+      
+      const xmlEntry = zipEntries.find(e => e.filename === path);
+      if (xmlEntry && (xmlEntry as any).getData) {
+        const content = await (xmlEntry as any).getData(new TextWriter());
+        setXmlContent(content);
+        setXmlFilename(path.split('/').pop() || path);
+        setSelectedGroupId(null);
+        setCurrentPage(1);
+      } else {
+        throw new Error();
+      }
     } catch (err: any) {
       setError('Lỗi khi trích xuất file XML đã chọn từ tệp ZIP.');
       setIsLoading(false);
@@ -439,13 +527,14 @@ export default function App() {
   }, [selectedGroup, dataset]);
 
   // Find image helper in zip
-  const findImageInZip = (zip: JSZip, frameName: string): string | null => {
+  const findImageInZip = (entries: Entry[], frameName: string): string | null => {
     const targetBaseName = frameName.split('/').pop()?.toLowerCase();
     if (!targetBaseName) return null;
 
     let matchedPath: string | null = null;
-    zip.forEach((relativePath, fileObj) => {
-      if (fileObj.dir) return;
+    entries.forEach((entry) => {
+      const relativePath = entry.filename;
+      if (entry.directory) return;
 
       const ext = relativePath.split('.').pop()?.toLowerCase();
       if (ext && ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tiff'].includes(ext)) {
@@ -458,24 +547,37 @@ export default function App() {
     return matchedPath;
   };
 
-  // Effect to load frame image from ZIP when active frame changes
+  // Effect to load frame image from ZIP or manual map when active frame changes
   useEffect(() => {
     let active = true;
     let localUrl: string | null = null;
 
     const loadFrameImage = async () => {
-      if (!selectedFrameData || !zipInstance) {
+      if (!selectedFrameData) {
+        setCurrentImageSrc(null);
+        return;
+      }
+
+      // 1. Check if we have a manual image uploaded for this frame
+      if (manualImages[selectedFrameData.name]) {
+        setCurrentImageSrc(manualImages[selectedFrameData.name]);
+        setImageLoading(false);
+        return;
+      }
+
+      // 2. Otherwise try loading from ZIP
+      if (!zipEntries) {
         setCurrentImageSrc(null);
         return;
       }
 
       setImageLoading(true);
       try {
-        const imgPath = findImageInZip(zipInstance, selectedFrameData.name);
+        const imgPath = findImageInZip(zipEntries, selectedFrameData.name);
         if (imgPath) {
-          const fileInZip = zipInstance.file(imgPath);
-          if (fileInZip) {
-            const blob = await fileInZip.async('blob');
+          const entry = zipEntries.find(e => e.filename === imgPath);
+          if (entry && (entry as any).getData) {
+            const blob = await (entry as any).getData(new BlobWriter());
             if (active) {
               localUrl = URL.createObjectURL(blob);
               setCurrentImageSrc(localUrl);
@@ -502,7 +604,7 @@ export default function App() {
         URL.revokeObjectURL(localUrl);
       }
     };
-  }, [selectedFrameData, zipInstance]);
+  }, [selectedFrameData, zipEntries, manualImages]);
 
   // Toggle label filter
   const handleLabelToggle = (label: string) => {
@@ -555,37 +657,7 @@ export default function App() {
     }
   };
 
-  // Download cleaned ZIP
-  const handleDownloadCleanedZIP = async () => {
-    if (!zipInstance || !dataset || !xmlContent || !selectedXmlPath) return;
 
-    try {
-      setIsCleaning(true);
-      const cleanedXml = removeDuplicatesFromXML(xmlContent, dataset, duplicateGroups);
-
-      // Update XML inside ZIP
-      zipInstance.file(selectedXmlPath, cleanedXml);
-
-      // Generate new ZIP
-      const contentBlob = await zipInstance.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(contentBlob);
-      const link = document.createElement('a');
-      link.href = url;
-
-      const origZipName = file?.name || 'dataset.zip';
-      const baseName = origZipName.substring(0, origZipName.lastIndexOf('.')) || origZipName;
-      link.setAttribute('download', `${baseName}_cleaned.zip`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      setSuccessMsg(`Đã cập nhật file XML trong ZIP và tải xuống file ZIP đã làm sạch thành công!`);
-    } catch (err: any) {
-      setError('Lỗi khi tạo file ZIP đã làm sạch: ' + err.message);
-    } finally {
-      setIsCleaning(false);
-    }
-  };
 
   // Download CSV report
   const handleDownloadCSVReport = () => {
@@ -663,20 +735,20 @@ export default function App() {
           </div>
           <div className="flex items-center space-x-3">
             <h2 className="text-xl font-bold tracking-tight">
-              <span style={{ color: '#9BB8F7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>G</span>
-              <span style={{ color: '#F4A9A5', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>o</span>
-              <span style={{ color: '#FFE38A', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>o</span>
-              <span style={{ color: '#A0D5A7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>g</span>
-              <span style={{ color: '#F4A9A5', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>l</span>
-              <span style={{ color: '#9BB8F7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>e</span>
-              <span style={{ color: '#FFE38A', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}> A</span>
-              <span style={{ color: '#A0D5A7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>I </span>
-              <span style={{ color: '#9BB8F7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>S</span>
-              <span style={{ color: '#F4A9A5', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>t</span>
-              <span style={{ color: '#FFE38A', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>u</span>
-              <span style={{ color: '#A0D5A7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>d</span>
-              <span style={{ color: '#F4A9A5', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>i</span>
-              <span style={{ color: '#9BB8F7', textShadow: '0 0 5px rgba(255,255,255,0.5)' }}>o</span>
+              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>G</span>
+              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
+              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
+              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>g</span>
+              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>l</span>
+              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>e</span>
+              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}> A</span>
+              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>I </span>
+              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>S</span>
+              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>t</span>
+              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>u</span>
+              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>d</span>
+              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>i</span>
+              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
             </h2>
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </div>
@@ -721,23 +793,46 @@ export default function App() {
                   accept=".xml,.zip"
                   className="hidden"
                 />
+                
+                {/* 
+                  Folder input for webkit browsers
+                  Requires specific attributes which React supports directly 
+                */}
+                <input
+                  type="file"
+                  ref={folderInputRef}
+                  onChange={handleFileChange}
+                  // @ts-ignore - React type for webkitdirectory is incomplete but works at runtime
+                  webkitdirectory="true"
+                  directory="true"
+                  multiple
+                  className="hidden"
+                />
 
                 <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mb-4 group-hover:scale-110 transition-transform duration-200">
                   <FileUp className="w-8 h-8" />
                 </div>
 
                 <span className="text-base font-semibold text-slate-800 mb-1 group-hover:text-red-500">
-                  Kéo thả tệp XML hoặc ZIP vào đây
+                  Kéo thả tệp XML, ZIP hoặc Thư mục vào đây
                 </span>
                 <span className="text-xs text-slate-400">
                   Hoặc click để chọn từ thiết bị (Hỗ trợ XML đơn hoặc ZIP gói đầy đủ)
                 </span>
 
-                <div className="mt-6 flex space-x-3 text-xs text-slate-400">
+                <div className="mt-6 flex space-x-3 text-xs text-slate-400 items-center">
                   <span className="flex items-center"><FileCode className="w-3.5 h-3.5 mr-1" /> CVAT XML</span>
-                  <span className="border-r border-slate-200"></span>
+                  <span className="border-r border-slate-200 h-3"></span>
                   <span className="flex items-center"><FileArchive className="w-3.5 h-3.5 mr-1" /> ZIP File</span>
                 </div>
+                
+                <button 
+                  onClick={handleFolderUploadClick}
+                  className="mt-6 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md z-10 relative flex items-center gap-1.5"
+                >
+                  <FileUp className="w-4 h-4" />
+                  <span>Tải Thư Mục (Folder) đã giải nén để tránh lỗi RAM</span>
+                </button>
               </div>
 
               <div className="mt-6 text-xs text-slate-400 flex items-start space-x-2 bg-slate-50 p-3.5 rounded-xl border border-slate-150">
@@ -838,7 +933,7 @@ export default function App() {
             <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center space-x-3.5">
                 <div className="p-3 bg-red-50 rounded-xl text-red-500">
-                  {zipInstance ? <FileArchive className="w-6 h-6" /> : <FileCode className="w-6 h-6" />}
+                  {zipEntries ? <FileArchive className="w-6 h-6" /> : <FileCode className="w-6 h-6" />}
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
@@ -856,7 +951,7 @@ export default function App() {
 
               <div className="flex items-center space-x-3 self-end md:self-auto">
                 {/* XML file selector if inside ZIP */}
-                {zipInstance && xmlFilesInZip.length > 1 && (
+                {zipEntries && xmlFilesInZip.length > 1 && (
                   <div className="flex items-center space-x-2">
                     <span className="text-xs font-semibold text-slate-500 shrink-0">Chọn file XML:</span>
                     <select
@@ -1413,7 +1508,7 @@ export default function App() {
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                               Đã tải ảnh thực tế từ ZIP
                             </span>
-                          ) : zipInstance ? (
+                          ) : zipEntries ? (
                             <span className="text-amber-400 font-sans font-medium">Không tìm thấy ảnh {selectedFrameData.name.split('/').pop()} trong ZIP</span>
                           ) : (
                             <span className="text-slate-500 font-sans">Chỉ có file XML (Vẽ mô phỏng)</span>
@@ -1555,9 +1650,56 @@ export default function App() {
                           </svg>
                         </div>
 
-                        {/* Visual label note */}
-                        <div className="self-center flex items-center space-x-2 text-xs text-slate-400 bg-slate-900/60 px-4 py-1.5 rounded-full border border-slate-800 backdrop-blur-xs z-10">
+                        {/* Visual label note & manual image uploader */}
+                        <div className="self-center flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400 bg-slate-900/60 px-4 py-2 rounded-full border border-slate-800 backdrop-blur-xs z-10">
                           <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-xs bg-sky-400 mr-1.5"></span>Label hiển thị trên box</span>
+                          
+                          <span className="text-slate-700">|</span>
+                          
+                          <div className="flex items-center space-x-2">
+                            <span className="text-slate-400">Ảnh nền:</span>
+                            <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded text-[10px] font-bold border border-slate-700 transition-colors flex items-center gap-1.5">
+                              <FileUp className="w-3.5 h-3.5" />
+                              <span>{currentImageSrc ? 'Thay đổi ảnh' : 'Tải tệp ảnh lẻ (.jpg/.png)'}</span>
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="hidden" 
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0] && selectedFrameData) {
+                                    const imgFile = e.target.files[0];
+                                    const objectUrl = URL.createObjectURL(imgFile);
+                                    setManualImages(prev => {
+                                      // Revoke old URL if exists to avoid memory leak
+                                      if (prev[selectedFrameData.name]) {
+                                        URL.revokeObjectURL(prev[selectedFrameData.name]);
+                                      }
+                                      return {
+                                        ...prev,
+                                        [selectedFrameData.name]: objectUrl
+                                      };
+                                    });
+                                  }
+                                }}
+                              />
+                            </label>
+                            {selectedFrameData && manualImages[selectedFrameData.name] && (
+                              <button 
+                                onClick={() => {
+                                  setManualImages(prev => {
+                                    const updated = { ...prev };
+                                    URL.revokeObjectURL(updated[selectedFrameData.name]);
+                                    delete updated[selectedFrameData.name];
+                                    return updated;
+                                  });
+                                }}
+                                className="text-rose-500 hover:text-rose-400 font-bold text-[10px] underline"
+                                title="Xóa ảnh nền đã tải thủ công"
+                              >
+                                Xóa
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                       </div>
@@ -1587,7 +1729,7 @@ export default function App() {
       <footer className="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2">
           <p>© 2026 CVAT Duplicate Bounding Box Auditor — Giải pháp tối ưu hóa dữ liệu ML.</p>
-          <p className="font-mono text-[10px] text-slate-300">Built using React 19 + TypeScript + JSZip + Tailwind CSS</p>
+          <p className="font-mono text-[10px] text-slate-300">Built using React 19 + TypeScript + zip.js + Tailwind CSS</p>
         </div>
       </footer>
     </div>
