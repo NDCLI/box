@@ -4,6 +4,7 @@ import {
   Layers,
   AlertTriangle,
   Trash2,
+  
   Settings,
   Search,
   Download,
@@ -27,9 +28,229 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ZipReader, BlobReader, BlobWriter, TextWriter, Entry } from '@zip.js/zip.js';
+import { ZipReader, BlobReader, BlobWriter, TextWriter, TextReader, ZipWriter, Entry } from '@zip.js/zip.js';
 import { parseCVATXML, detectDuplicates, removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
+
 import { CVATDataset, DuplicateGroup, DetectionSettings, CVATBox } from './types';
+
+
+
+function CustomZoomPanPinch({ 
+  children, 
+  contentWidth, 
+  contentHeight, 
+  onZoomToElementRef 
+}) {
+  const stageRef = useRef(null);
+  const dragRef = useRef(null);
+  const txRef = useRef({ scale: 1, panX: 0, panY: 0 });
+  const [tx, setTx] = useState({ scale: 1, panX: 0, panY: 0 });
+  const [isAnimating, setIsAnimating] = useState(false);
+  const animTimeoutRef = useRef(null);
+
+  const MIN_ZOOM = 0.05;
+  const MAX_ZOOM = 50;
+
+  function constrainViewerPan(tx, stage) {
+    if (!stage || !contentWidth || !contentHeight) return tx;
+    const { scale, panX, panY } = tx;
+    const bounds = stage.getBoundingClientRect();
+    
+    const imgWidth = contentWidth * scale;
+    const imgHeight = contentHeight * scale;
+
+    const maxPanX = imgWidth + bounds.width * 5;
+    const maxPanY = imgHeight + bounds.height * 5;
+
+    const constrainedPanX = Math.min(Math.max(panX, -maxPanX), maxPanX);
+    const constrainedPanY = Math.min(Math.max(panY, -maxPanY), maxPanY);
+
+    return { scale, panX: constrainedPanX, panY: constrainedPanY };
+  }
+
+  function updateTx(nextTx, animated = false) {
+    if (!nextTx || isNaN(nextTx.scale) || isNaN(nextTx.panX) || isNaN(nextTx.panY)) {
+      console.error('Invalid zoom Tx', nextTx);
+      return;
+    }
+    const stage = stageRef.current;
+    if (stage) {
+      nextTx = constrainViewerPan(nextTx, stage);
+    }
+    
+    if (animated) {
+      setIsAnimating(true);
+      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
+      animTimeoutRef.current = setTimeout(() => setIsAnimating(false), 800);
+    } else {
+      setIsAnimating(false);
+      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
+    }
+    
+    txRef.current = nextTx;
+    setTx(nextTx);
+  }
+
+  useEffect(() => {
+    if (onZoomToElementRef) {
+      onZoomToElementRef.current = {
+        zoomToElement: (elementId, padding = 0, duration = 800, easing = 'easeOut') => {
+          const el = typeof elementId === 'string' ? document.getElementById(elementId) : elementId;
+          if (el && stageRef.current && contentWidth && contentHeight) {
+            let x = 0, y = 0, width = 0, height = 0;
+            
+            // Try to read SVG attributes if available (much more reliable)
+            if (el.hasAttribute('x') && el.hasAttribute('y') && el.hasAttribute('width') && el.hasAttribute('height')) {
+              x = parseFloat(el.getAttribute('x')) || 0;
+              y = parseFloat(el.getAttribute('y')) || 0;
+              width = parseFloat(el.getAttribute('width')) || 0;
+              height = parseFloat(el.getAttribute('height')) || 0;
+            } else {
+              // Fallback to bounding rect calculations
+              const contentContainer = stageRef.current.firstElementChild;
+              const contentRect = contentContainer.getBoundingClientRect();
+              const elRect = el.getBoundingClientRect();
+              
+              const currentScale = txRef.current.scale;
+              
+              x = (elRect.left - contentRect.left) / currentScale;
+              y = (elRect.top - contentRect.top) / currentScale;
+              width = elRect.width / currentScale;
+              height = elRect.height / currentScale;
+            }
+            
+            if (width > 0 && height > 0) {
+              const stageBounds = stageRef.current.getBoundingClientRect();
+              
+              // Add some visual padding around the zoomed element
+              const paddedWidth = width + 50; 
+              const paddedHeight = height + 50;
+
+              const scaleX = stageBounds.width / paddedWidth;
+              const scaleY = stageBounds.height / paddedHeight;
+              
+              // Cap the maximum scale so it doesn't zoom in crazy much for tiny boxes
+              const targetScale = Math.min(scaleX, scaleY, 5); 
+              const newScale = Math.min(Math.max(targetScale, MIN_ZOOM), MAX_ZOOM);
+              
+              const newPanX = stageBounds.width / 2 - (x + width / 2) * newScale;
+              const newPanY = stageBounds.height / 2 - (y + height / 2) * newScale;
+              
+              updateTx({ scale: newScale, panX: newPanX, panY: newPanY }, true); // animate!
+            }
+          }
+        }
+      };
+    }
+  }, [onZoomToElementRef, contentWidth, contentHeight]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage && contentWidth && contentHeight) {
+      const bounds = stage.getBoundingClientRect();
+      const scaleX = bounds.width / contentWidth;
+      const scaleY = bounds.height / contentHeight;
+      const fitScale = Math.min(scaleX, scaleY, 1);
+      
+      const panX = (bounds.width - contentWidth * fitScale) / 2;
+      const panY = (bounds.height - contentHeight * fitScale) / 2;
+      
+      updateTx({ scale: fitScale, panX, panY }, false);
+    }
+  }, [contentWidth, contentHeight]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    function onWheel(event) {
+      event.preventDefault();
+      const { scale, panX, panY } = txRef.current;
+      const bounds = stage.getBoundingClientRect();
+      const cx = event.clientX - bounds.left;
+      const cy = event.clientY - bounds.top;
+
+      const ix = (cx - panX) / scale;
+      const iy = (cy - panY) / scale;
+
+      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+      let newScale = scale * zoomFactor;
+      newScale = Math.min(Math.max(newScale, MIN_ZOOM), MAX_ZOOM);
+
+      const newPanX = cx - ix * newScale;
+      const newPanY = cy - iy * newScale;
+
+      updateTx({ scale: newScale, panX: newPanX, panY: newPanY }, false);
+    }
+
+    stage.addEventListener('wheel', onWheel, { passive: false });
+    return () => stage.removeEventListener('wheel', onWheel);
+  }, []);
+
+  function handleMouseDown(event) {
+    event.preventDefault();
+    dragRef.current = { lastX: event.clientX, lastY: event.clientY };
+    document.body.style.cursor = 'grabbing';
+  }
+
+  function handleMouseMove(event) {
+    if (!dragRef.current) return;
+    const dx = event.clientX - dragRef.current.lastX;
+    const dy = event.clientY - dragRef.current.lastY;
+    dragRef.current = { lastX: event.clientX, lastY: event.clientY };
+    
+    const { scale, panX, panY } = txRef.current;
+    updateTx({ scale, panX: panX + dx, panY: panY + dy }, false);
+  }
+
+  function handleMouseUp() {
+    dragRef.current = null;
+    document.body.style.cursor = '';
+  }
+
+  function handleDoubleClick(event) {
+    const stage = stageRef.current;
+    if (stage && contentWidth && contentHeight) {
+      const bounds = stage.getBoundingClientRect();
+      const scaleX = bounds.width / contentWidth;
+      const scaleY = bounds.height / contentHeight;
+      const fitScale = Math.min(scaleX, scaleY, 1);
+      
+      const panX = (bounds.width - contentWidth * fitScale) / 2;
+      const panY = (bounds.height - contentHeight * fitScale) / 2;
+      
+      updateTx({ scale: fitScale, panX, panY }, true);
+    }
+  }
+
+  return (
+    <div 
+      ref={stageRef}
+      className="w-full h-full relative overflow-hidden"
+      style={{ cursor: tx.scale > 1 ? 'grab' : 'default' }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onDoubleClick={handleDoubleClick}
+    >
+      <div 
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          transform: `translate(${tx.panX}px, ${tx.panY}px) scale(${tx.scale})`,
+          transformOrigin: '0 0',
+          width: contentWidth ? `${contentWidth}px` : '100%',
+          height: contentHeight ? `${contentHeight}px` : '100%',
+          transition: isAnimating ? 'transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
+        }}
+      >
+        {children({ state: { scale: tx.scale } })}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   // File uploading states
@@ -47,8 +268,7 @@ export default function App() {
   // Image states from ZIP
   const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
-  const [imageOpacity, setImageOpacity] = useState<number>(0.85); // Option to control brightness/opacity of image overlay
-  
+    
   // Manual image uploads mapping for single frame view
   const [manualImages, setManualImages] = useState<Record<string, string>>({});
 
@@ -93,10 +313,8 @@ export default function App() {
   };
 
   // Visualizer settings
-  const [zoomToDuplicates, setZoomToDuplicates] = useState(true);
-  const [customZoomPadding, setCustomZoomPadding] = useState<number>(60); // padding around duplicates (px)
-  const [showGrid, setShowGrid] = useState(true);
-  const [hoveredBoxId, setHoveredBoxId] = useState<string | null>(null);
+    const [customZoomPadding, setCustomZoomPadding] = useState<number>(60); // padding around duplicates (px)
+    const [hoveredBoxId, setHoveredBoxId] = useState<string | null>(null);
 
   // Pagination for duplicate groups list
   const [currentPage, setCurrentPage] = useState(1);
@@ -105,19 +323,17 @@ export default function App() {
   // Cleanup feedback
   const [isCleaning, setIsCleaning] = useState(false);
 
+
+
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
+  const transformComponentRef = useRef<any>(null);
 
   // Trigger file browser
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFolderUploadClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    folderInputRef.current?.click();
-  };
 
   // Reset all state when new file starts uploading
   const resetState = () => {
@@ -189,173 +405,84 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      // Check if it's a directory upload (multiple files or has webkitRelativePath)
-      const isDirectoryUpload = fileArray.length > 1 || (fileArray[0].webkitRelativePath && fileArray[0].webkitRelativePath.includes('/'));
-
-      if (isDirectoryUpload) {
-        // Handle directory upload
-        const xmlFiles = fileArray.filter(f => f.name.toLowerCase().endsWith('.xml') && !f.webkitRelativePath.includes('__MACOSX/'));
-        
-        if (xmlFiles.length === 0) {
-          throw new Error('Không tìm thấy tệp tin XML nào trong thư mục đã tải lên.');
+      // Handle single file upload
+      const uploadedFile = fileArray[0];
+      setFile(uploadedFile);
+      
+      const extension = uploadedFile.name.split('.').pop()?.toLowerCase();
+      if (extension === 'zip') {
+        let entries: Entry[] = [];
+        try {
+          const zipFileReader = new BlobReader(uploadedFile);
+          const zipReader = new ZipReader(zipFileReader);
+          entries = await zipReader.getEntries();
+          setZipEntries(entries);
+        } catch (zipErr: any) {
+          console.error("Lỗi nạp tệp ZIP:", zipErr);
+          const errorMsg = zipErr.message || String(zipErr);
+          throw new Error(
+            `Không thể đọc tệp ZIP (Lỗi: ${errorMsg}).\n` +
+            `💡 Mẹo: Tệp tin ZIP có thể bị hỏng.`
+          );
         }
 
-        // Use the first XML file found
-        const mainXmlFile = xmlFiles.find(f => f.name.toLowerCase().includes('annotation')) || xmlFiles[0];
-        setFile(mainXmlFile);
-        
-        try {
-          const content = await mainXmlFile.text();
+        const xmlPaths: string[] = [];
+        entries.forEach((entry) => {
+          const relativePath = entry.filename;
+          if (relativePath.toLowerCase().endsWith('.xml') && !relativePath.startsWith('__MACOSX/')) {
+            xmlPaths.push(relativePath);
+          }
+        });
+
+        if (xmlPaths.length === 0) {
+          throw new Error('Không tìm thấy tệp tin XML nào trong tệp ZIP đã tải lên.');
+        }
+
+        setXmlFilesInZip(xmlPaths);
+        const defaultXml = xmlPaths.find(p => p.toLowerCase().includes('annotation')) || xmlPaths[0];
+        setSelectedXmlPath(defaultXml);
+
+        const xmlEntry = entries.find(e => e.filename === defaultXml);
+        if (xmlEntry && (xmlEntry as any).getData) {
+          const content = await (xmlEntry as any).getData(new TextWriter());
           setXmlContent(content);
-          setXmlFilename(mainXmlFile.name);
+          setXmlFilename(defaultXml.split('/').pop() || defaultXml);
+        } else {
+           throw new Error('Không thể đọc file XML trong ZIP.');
+        }
+
+      } else if (extension === 'xml') {
+        try {
+          const content = await uploadedFile.text();
+          setXmlContent(content);
+          setXmlFilename(uploadedFile.name);
         } catch (err) {
           throw new Error('Không thể đọc tệp XML này.');
         }
-
-        // Cache object URLs for image files
-        const newManualImages: Record<string, string> = {};
-        fileArray.forEach(f => {
-          const ext = f.name.split('.').pop()?.toLowerCase();
-          if (ext && ['jpg', 'jpeg', 'png', 'bmp', 'webp'].includes(ext)) {
-            // Index by filename so we can look it up later
-            const objectUrl = URL.createObjectURL(f);
-            newManualImages[f.name] = objectUrl;
-          }
-        });
-        
-        setManualImages(newManualImages);
-
       } else {
-        // Handle single file upload
-        const uploadedFile = fileArray[0];
-        setFile(uploadedFile);
-        
-        const extension = uploadedFile.name.split('.').pop()?.toLowerCase();
-        if (extension === 'zip') {
-          let entries: Entry[] = [];
-          try {
-            const zipFileReader = new BlobReader(uploadedFile);
-            const zipReader = new ZipReader(zipFileReader);
-            entries = await zipReader.getEntries();
-            setZipEntries(entries);
-          } catch (zipErr: any) {
-            console.error("Lỗi nạp tệp ZIP:", zipErr);
-            const errorMsg = zipErr.message || String(zipErr);
-            if (errorMsg.toLowerCase().includes("could not be read") || errorMsg.toLowerCase().includes("permission") || errorMsg.includes("NotReadableError")) {
-              throw new Error(
-                `Trình duyệt bị từ chối quyền đọc tệp ZIP (Lỗi: ${errorMsg}).\n` +
-                `💡 Cách khắc phục:\n` +
-                `1. Hãy tải lên "Thư Mục (Folder)" đã giải nén thay vì tải lên tệp ZIP để tránh lỗi này và không bị tràn RAM.`
-              );
-            }
-            throw new Error(
-              `Không thể đọc tệp ZIP (Lỗi: ${errorMsg}).\n` +
-              `💡 Mẹo: Tệp tin ZIP có thể bị hỏng. Hãy giải nén ở máy và bấm nút "Tải Thư Mục" lên.`
-            );
-          }
-
-          const xmlPaths: string[] = [];
-          entries.forEach((entry) => {
-            const relativePath = entry.filename;
-            if (relativePath.toLowerCase().endsWith('.xml') && !relativePath.startsWith('__MACOSX/')) {
-              xmlPaths.push(relativePath);
-            }
-          });
-
-          if (xmlPaths.length === 0) {
-            throw new Error('Không tìm thấy tệp tin XML nào trong tệp ZIP đã tải lên.');
-          }
-
-          setXmlFilesInZip(xmlPaths);
-          const defaultXml = xmlPaths.find(p => p.toLowerCase().includes('annotation')) || xmlPaths[0];
-          setSelectedXmlPath(defaultXml);
-
-          const xmlEntry = entries.find(e => e.filename === defaultXml);
-          if (xmlEntry && (xmlEntry as any).getData) {
-            const content = await (xmlEntry as any).getData(new TextWriter());
-            setXmlContent(content);
-            setXmlFilename(defaultXml.split('/').pop() || defaultXml);
-          } else {
-             throw new Error('Không thể đọc file XML trong ZIP.');
-          }
-
-        } else if (extension === 'xml') {
-          try {
-            const content = await uploadedFile.text();
-            setXmlContent(content);
-            setXmlFilename(uploadedFile.name);
-          } catch (err) {
-            throw new Error('Không thể đọc tệp XML này.');
-          }
-        } else {
-          throw new Error('Định dạng tệp không được hỗ trợ. Vui lòng tải lên tệp .XML, .ZIP hoặc chọn cả Thư Mục (Folder).');
-        }
+        throw new Error('Định dạng tệp không được hỗ trợ. Vui lòng tải lên tệp .XML hoặc .ZIP.');
       }
     } catch (err: any) {
-      setError(err.message || 'Đã xảy ra lỗi khi xử lý tệp.');
+      setError(err.message || 'Lỗi không xác định khi tải tệp lên.');
+    } finally {
       setIsLoading(false);
     }
   };
 
-  // Parse XML content when it becomes available
+  // Parse XML when content changes
   useEffect(() => {
     if (!xmlContent) return;
 
     try {
-      setIsLoading(true);
-      const parsedDataset = parseCVATXML(xmlContent, xmlFilename);
-      setDataset(parsedDataset);
-      // Initialize selected labels to all labels
-      setSelectedLabels(parsedDataset.labels);
-      setSuccessMsg(`Tải và phân tích dữ liệu thành công! Tìm thấy ${parsedDataset.frames.length} khung hình.`);
-      setError(null);
+      const parsed = parseCVATXML(xmlContent, xmlFilename);
+      setDataset(parsed);
+      setSelectedLabels(parsed.labels); // Tự động chọn tất cả nhãn khi nạp
+      setSelectedGroupId(null);
+      setCurrentPage(1);
     } catch (err: any) {
-      setError(err.message || 'Lỗi phân tích cú pháp tệp XML CVAT.');
-      setDataset(null);
-    } finally {
-      setIsLoading(false);
+      setError('Lỗi khi phân tích XML: ' + err.message);
     }
   }, [xmlContent, xmlFilename]);
-
-  // Auto-hide success notification after 5s
-  useEffect(() => {
-    if (!successMsg) return;
-    const timer = window.setTimeout(() => setSuccessMsg(null), 5000);
-    return () => window.clearTimeout(timer);
-  }, [successMsg]);
-
-  // Auto-fill Start/End input khi load file mới
-  useEffect(() => {
-    if (!dataset) return;
-    const ids = dataset.frames.map(f => parseInt(f.id, 10)).filter(id => !isNaN(id));
-    const minF = ids.length ? Math.min(...ids) : 0;
-    const maxF = ids.length ? Math.max(...ids) : 0;
-    setFrameRangeStart(minF.toString());
-    setFrameRangeEnd(maxF.toString());
-  }, [dataset]);
-
-  // Handle changing selected XML from ZIP
-  const handleXmlPathChange = async (path: string) => {
-    if (!zipEntries) return;
-    try {
-      setIsLoading(true);
-      setSelectedXmlPath(path);
-      
-      const xmlEntry = zipEntries.find(e => e.filename === path);
-      if (xmlEntry && (xmlEntry as any).getData) {
-        const content = await (xmlEntry as any).getData(new TextWriter());
-        setXmlContent(content);
-        setXmlFilename(path.split('/').pop() || path);
-        setSelectedGroupId(null);
-        setCurrentPage(1);
-      } else {
-        throw new Error();
-      }
-    } catch (err: any) {
-      setError('Lỗi khi trích xuất file XML đã chọn từ tệp ZIP.');
-      setIsLoading(false);
-    }
-  };
 
   // Calculate duplicates dynamically based on dataset and settings
   const duplicateGroups = useMemo(() => {
@@ -657,7 +784,29 @@ export default function App() {
     }
   };
 
-
+  // Handle changing selected XML from ZIP
+  const handleXmlPathChange = async (path: string) => {
+    if (!zipEntries) return;
+    try {
+      setIsLoading(true);
+      setSelectedXmlPath(path);
+      
+      const xmlEntry = zipEntries.find(e => e.filename === path);
+      if (xmlEntry && (xmlEntry as any).getData) {
+        const content = await (xmlEntry as any).getData(new TextWriter());
+        setXmlContent(content);
+        setXmlFilename(path.split('/').pop() || path);
+        setSelectedGroupId(null);
+        setCurrentPage(1);
+      } else {
+        throw new Error('Không thể đọc file XML trong ZIP.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi tải file XML.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Download CSV report
   const handleDownloadCSVReport = () => {
@@ -735,20 +884,7 @@ export default function App() {
           </div>
           <div className="flex items-center space-x-3">
             <h2 className="text-xl font-bold tracking-tight">
-              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>G</span>
-              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
-              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
-              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>g</span>
-              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>l</span>
-              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>e</span>
-              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}> A</span>
-              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>I </span>
-              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>S</span>
-              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>t</span>
-              <span style={{ color: '#FFD966', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>u</span>
-              <span style={{ color: '#81C995', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>d</span>
-              <span style={{ color: '#F59591', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>i</span>
-              <span style={{ color: '#7BA7F4', textShadow: '0 0 10px rgba(255,255,255,0.8), -1px -1px 3px rgba(255,255,255,0.6), 1px 1px 3px rgba(255,255,255,0.6)' }}>o</span>
+              <span className="font-sans font-medium text-slate-300">Build With Google AI Studio</span>
             </h2>
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </div>
@@ -794,27 +930,14 @@ export default function App() {
                   className="hidden"
                 />
                 
-                {/* 
-                  Folder input for webkit browsers
-                  Requires specific attributes which React supports directly 
-                */}
-                <input
-                  type="file"
-                  ref={folderInputRef}
-                  onChange={handleFileChange}
-                  // @ts-ignore - React type for webkitdirectory is incomplete but works at runtime
-                  webkitdirectory="true"
-                  directory="true"
-                  multiple
-                  className="hidden"
-                />
+
 
                 <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mb-4 group-hover:scale-110 transition-transform duration-200">
                   <FileUp className="w-8 h-8" />
                 </div>
 
                 <span className="text-base font-semibold text-slate-800 mb-1 group-hover:text-red-500">
-                  Kéo thả tệp XML, ZIP hoặc Thư mục vào đây
+                  Kéo thả tệp XML hoặc ZIP vào đây
                 </span>
                 <span className="text-xs text-slate-400">
                   Hoặc click để chọn từ thiết bị (Hỗ trợ XML đơn hoặc ZIP gói đầy đủ)
@@ -826,13 +949,7 @@ export default function App() {
                   <span className="flex items-center"><FileArchive className="w-3.5 h-3.5 mr-1" /> ZIP File</span>
                 </div>
                 
-                <button 
-                  onClick={handleFolderUploadClick}
-                  className="mt-6 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md z-10 relative flex items-center gap-1.5"
-                >
-                  <FileUp className="w-4 h-4" />
-                  <span>Tải Thư Mục (Folder) đã giải nén để tránh lỗi RAM</span>
-                </button>
+
               </div>
 
               <div className="mt-6 text-xs text-slate-400 flex items-start space-x-2 bg-slate-50 p-3.5 rounded-xl border border-slate-150">
@@ -844,7 +961,7 @@ export default function App() {
             </div>
 
             {/* Right side: Instructions and info */}
-            <div className="lg:col-span-5 bg-slate-900 text-white rounded-3xl p-8 flex flex-col justify-between shadow-xl shadow-slate-200 relative overflow-hidden">
+            <div className="lg:col-span-12 bg-slate-900 text-white rounded-3xl p-8 flex flex-col justify-between shadow-xl shadow-slate-200 relative overflow-hidden">
               <div className="absolute top-0 right-0 transform translate-x-20 -translate-y-20 w-80 h-80 bg-red-500/10 rounded-full blur-3xl"></div>
 
               <div>
@@ -876,7 +993,7 @@ export default function App() {
               </div>
 
               <div className="mt-8 pt-6 border-t border-slate-800 text-xs text-slate-400 flex justify-between items-center">
-                <span>Audit Mode v3.0</span>
+                <span>Version v1.0</span>
                 <span>CVAT XML / ZIP Support</span>
               </div>
             </div>
@@ -1228,7 +1345,7 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
 
               {/* Left Column: Duplicate Groups Directory */}
-              <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-xs flex flex-col min-h-[600px]">
+              <div className="lg:col-span-12 bg-white rounded-3xl border border-slate-200 shadow-xs flex flex-col min-h-[600px]">
 
                 {/* Search and Filters Header */}
                 <div className="p-4 border-b border-slate-100 space-y-3 shrink-0">
@@ -1291,7 +1408,7 @@ export default function App() {
                 </div>
 
                 {/* List Container */}
-                <div className="flex-1 overflow-y-auto min-h-0 divide-y divide-slate-100">
+                <div className="flex-1 overflow-y-auto min-h-0 p-4 bg-slate-50/50"><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   <AnimatePresence mode="popLayout">
                     {paginatedGroups.length > 0 ? (
                       paginatedGroups.map((group, index) => {
@@ -1305,9 +1422,9 @@ export default function App() {
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -5 }}
                             onClick={() => setSelectedGroupId(group.id)}
-                            className={`p-3.5 flex items-center justify-between cursor-pointer transition-colors ${isSelected
-                              ? 'bg-red-50/50 border-l-4 border-l-red-500'
-                              : 'hover:bg-slate-50/60'
+                            className={`p-4 flex flex-col justify-between cursor-pointer transition-all rounded-2xl border shadow-xs ${isSelected
+                              ? 'bg-red-50/50 border-red-300 ring-2 ring-red-500/20'
+                              : 'bg-white border-slate-200 hover:border-red-300 hover:shadow-md'
                               }`}
                           >
                             <div className="min-w-0 pr-3">
@@ -1378,6 +1495,7 @@ export default function App() {
                       </div>
                     )}
                   </AnimatePresence>
+                  </div>
                 </div>
 
                 {/* Pagination footer */}
@@ -1406,8 +1524,26 @@ export default function App() {
                 )}
               </div>
 
+            </div>
+
+          </div>
+        )}
+
+      </main>
+      {/* Modal Preview */}
+      <AnimatePresence>
+        {selectedGroupId && selectedGroup && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-full h-full max-w-7xl flex flex-col relative bg-white rounded-3xl shadow-2xl overflow-hidden"
+            >
+              
               {/* Right Column: Visual Inspector & Comparison table */}
-              <div className="lg:col-span-7 flex flex-col min-h-[600px] gap-6">
+              <div className="flex flex-col flex-1 h-full max-h-full">
 
                 {/* SVG Visual Canvas Box */}
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-xs flex flex-col flex-1 overflow-hidden">
@@ -1418,77 +1554,50 @@ export default function App() {
                       <Eye className="w-4.5 h-4.5 text-slate-500" />
                       <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
                         {selectedFrameData
-                          ? `Trực quan hoá: ${selectedFrameData.name}`
-                          : 'Bộ Trực Quan Hộp Bounding Box'
+                          ? `Preview: ${selectedFrameData.name}`
+                          : 'Preview'
                         }
                       </h3>
                     </div>
 
-                    {selectedFrameData && (
+                    <button 
+  onClick={() => setSelectedGroupId(null)}
+  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors mr-2"
+  title="Đóng Preview"
+>
+  <X className="w-5 h-5" />
+</button>
+{selectedFrameData && (
                       <div className="flex items-center space-x-2">
-                        {/* Image opacity control if image is loaded */}
-                        {currentImageSrc && (
-                          <div className="flex items-center space-x-1.5 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 mr-1">
-                            <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
-                            <input
-                              type="range"
-                              min="0.1"
-                              max="1.0"
-                              step="0.05"
-                              value={imageOpacity}
-                              onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
-                              className="w-12 sm:w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-500"
-                              title="Điều chỉnh độ sáng/độ mờ của ảnh nền"
-                            />
-                            <span className="text-[9px] sm:text-[10px] font-mono text-slate-500 w-7 text-right">
-                              {Math.round(imageOpacity * 100)}%
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Show Grid toggle */}
-                        <button
-                          onClick={() => setShowGrid(!showGrid)}
-                          className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center space-x-1.5 ${showGrid
-                            ? 'bg-red-50 border-red-200 text-red-700'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-100'
-                            }`}
-                          title="Bật/Tắt lưới toạ độ nền"
-                        >
-                          <Grid className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Lưới tọa độ</span>
-                        </button>
-
                         {/* Zoom to duplicates toggle with dynamic padding slider */}
                         <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
                           <button
-                            onClick={() => setZoomToDuplicates(!zoomToDuplicates)}
-                            className={`p-1 rounded-md text-xs font-bold transition-all flex items-center space-x-1 ${zoomToDuplicates
-                              ? 'bg-white text-red-700 shadow-2xs border border-slate-200'
-                              : 'text-slate-500 hover:text-slate-800'
-                              }`}
-                            title="Bật/Tắt tự động thu phóng cận cảnh vào đối tượng"
+                            onClick={() => {
+                              if (transformComponentRef.current) {
+                                transformComponentRef.current.zoomToElement('duplicate-group-bounds', undefined, 800, 'easeOut');
+                              }
+                            }}
+                            className="p-1 rounded-md text-xs font-bold transition-all flex items-center space-x-1 bg-white text-blue-700 shadow-2xs border border-slate-200 hover:bg-slate-50"
+                            title="Di chuyển đến vị trí lỗi trên ảnh"
                           >
-                            {zoomToDuplicates ? <Minimize2 className="w-3.5 h-3.5 text-red-500" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                            <span className="hidden sm:inline">Zoom Cận Cảnh</span>
+                            <Maximize2 className="w-3.5 h-3.5 text-blue-600" />
+                            <span className="hidden sm:inline">Đến vị trí lỗi</span>
                           </button>
-                          {zoomToDuplicates && (
-                            <div className="flex items-center space-x-1 pl-1.5 border-l border-slate-200">
-                              <input
-                                type="range"
-                                min="10"
-                                max="400"
-                                step="5"
-                                value={customZoomPadding}
-                                onChange={(e) => setCustomZoomPadding(parseInt(e.target.value, 10))}
-                                className="w-12 sm:w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-500"
-                                title="Kéo về trái để zoom siêu gần sát đối tượng nhỏ (giảm khoảng đệm)"
-                              />
-                              <span className="text-[9px] sm:text-[10px] font-mono font-semibold text-slate-600 w-11 text-right" title="Khoảng cách lề bao quanh đối tượng (px). Càng nhỏ thì zoom càng cận!">
-                                ±{customZoomPadding}px
-                              </span>
-                            </div>
-                          )}
+                          <div className="flex items-center space-x-1 pl-1.5 border-l border-slate-200">
+                            <input
+                              type="range"
+                              min="10"
+                              max="400"
+                              step="5"
+                              value={customZoomPadding}
+                              onChange={(e) => setCustomZoomPadding(parseInt(e.target.value, 10))}
+                              className="w-12 sm:w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                              title="Kéo về trái để zoom siêu gần sát đối tượng nhỏ (giảm khoảng đệm)"
+                            />
+                            <span className="text-[9px] sm:text-[10px] font-mono font-semibold text-slate-600 w-11 text-right" title="Khoảng cách lề bao quanh đối tượng (px). Càng nhỏ thì zoom càng cận!">
+                              ±{customZoomPadding}px
+                            </span>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1525,30 +1634,31 @@ export default function App() {
                             </div>
                           )}
 
-                          <svg
-                            viewBox={zoomToDuplicates ? getZoomViewBox() : `0 0 ${selectedFrameData.width} ${selectedFrameData.height}`}
-                            className="w-full h-full max-h-[600px] lg:max-h-[800px] border border-slate-800 shadow-2xl transition-all duration-300"
-                          >
-                            {/* SVG Grid pattern */}
-                            {showGrid && (
-                              <defs>
-                                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-                                </pattern>
-                                <pattern id="grid-major" width="200" height="200" patternUnits="userSpaceOnUse">
-                                  <rect width="200" height="200" fill="url(#grid)" />
-                                  <path d="M 200 0 L 0 0 0 200" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
-                                </pattern>
-                              </defs>
-                            )}
+                          <CustomZoomPanPinch 
+        contentWidth={selectedFrameData.width} 
+        contentHeight={selectedFrameData.height}
+        onZoomToElementRef={transformComponentRef}
+      >
+      
+                            {({ state }) => {
+                              const currentScale = state.scale || 1;
+                              const dynamicStrokeWidth = (1.5 / currentScale).toString();
+                              const dynamicHighlightStrokeWidth = (2 / currentScale).toString();
+                              const labelScale = Math.min(1, 1 / currentScale * 2);
 
+                              return (
+                            
+                              <svg
+                                viewBox={`0 0 ${selectedFrameData.width} ${selectedFrameData.height}`}
+                                className="w-full h-full border border-slate-800 shadow-2xl"
+                              >
                             {/* Background drawing (Image or solid dark color) */}
                             {currentImageSrc ? (
                               <image
                                 href={currentImageSrc}
                                 width={selectedFrameData.width}
                                 height={selectedFrameData.height}
-                                opacity={imageOpacity}
+                                
                                 preserveAspectRatio="none"
                               />
                             ) : (
@@ -1559,13 +1669,16 @@ export default function App() {
                               />
                             )}
 
-                            {/* Grid overlay */}
-                            {showGrid && (
-                              <rect
-                                width={selectedFrameData.width}
-                                height={selectedFrameData.height}
-                                fill="url(#grid-major)"
-                              />
+                            {selectedGroup && selectedFrameData && selectedGroup.boxes.length > 0 && (
+                              <foreignObject id="duplicate-group-bounds"
+                                x={Math.max(0, Math.min(...selectedGroup.boxes.map(b => b.xtl)) - customZoomPadding)}
+                                y={Math.max(0, Math.min(...selectedGroup.boxes.map(b => b.ytl)) - customZoomPadding)}
+                                width={Math.max(0, Math.max(...selectedGroup.boxes.map(b => b.xbr)) - Math.min(...selectedGroup.boxes.map(b => b.xtl)) + customZoomPadding * 2)}
+                                height={Math.max(0, Math.max(...selectedGroup.boxes.map(b => b.ybr)) - Math.min(...selectedGroup.boxes.map(b => b.ytl)) + customZoomPadding * 2)}
+                                pointerEvents="none"
+                              >
+                                <div style={{ width: '100%', height: '100%' }}></div>
+                              </foreignObject>
                             )}
 
                             {/* DRAW ALL OTHER BOXES on this frame (Non-duplicates) */}
@@ -1580,19 +1693,23 @@ export default function App() {
                                     height={box.ybr - box.ytl}
                                     fill="none"
                                     stroke="#475569"
-                                    strokeWidth="1.5"
+                                    strokeWidth={dynamicStrokeWidth}
+                                    vectorEffect="non-scaling-stroke"
                                     strokeDasharray="4,4"
                                   />
-                                  <text
-                                    x={box.xtl + 4}
-                                    y={box.ytl + 12}
-                                    fill="#94a3b8"
-                                    fontSize="10"
-                                    fontWeight="bold"
-                                    fontFamily="monospace"
-                                  >
-                                    {box.label}
-                                  </text>
+                                  
+                                  <g style={{ transform: `scale(${labelScale})`, transformOrigin: `${box.xtl}px ${box.ytl}px` }}>
+                                    <text
+                                      x={box.xtl + 4}
+                                      y={box.ytl + 12}
+                                      fill="#94a3b8"
+                                      fontSize="10"
+                                      fontWeight="bold"
+                                      fontFamily="monospace"
+                                    >
+                                      {box.label}
+                                    </text>
+                                  </g>
                                 </g>
                               ))}
 
@@ -1603,7 +1720,7 @@ export default function App() {
 
                               // Highlight duplicate group only; app no longer marks keep/delete boxes.
                               const color = '#38bdf8';
-                              const strokeWidth = isHovered ? '4' : '2.5';
+                              const strokeWidth = dynamicHighlightStrokeWidth;
 
                               return (
                                 <g
@@ -1621,33 +1738,41 @@ export default function App() {
                                     fill="rgba(56,189,248,0.06)"
                                     stroke={color}
                                     strokeWidth={strokeWidth}
+                                    vectorEffect="non-scaling-stroke"
                                     style={{ transition: 'stroke-width 0.15s ease' }}
                                   />
 
                                   {/* Small label badge at top-left of box */}
-                                  <rect
-                                    x={box.xtl}
-                                    y={box.ytl - (isFirst ? 18 : 34)}
-                                    width={Math.max((box.label.length * 7) + 30, 95)}
-                                    height="16"
-                                    fill={color}
-                                    rx="2"
-                                  />
+                                  <g style={{ transform: `scale(${labelScale})`, transformOrigin: `${box.xtl}px ${box.ytl}px` }}>
+                                    <rect
+                                      x={box.xtl}
+                                      y={box.ytl - (isFirst ? 18 : 34)}
+                                      width={Math.max((box.label.length * 7) + 30, 95)}
+                                      height="16"
+                                      fill={color}
+                                      rx="2"
+                                    />
 
-                                  <text
-                                    x={box.xtl + 5}
-                                    y={box.ytl - (isFirst ? 6 : 22)}
-                                    fill="#ffffff"
-                                    fontSize="9.5"
-                                    fontWeight="black"
-                                    fontFamily="sans-serif"
-                                  >
-                                    {box.label}
-                                  </text>
+                                    <text
+                                      x={box.xtl + 5}
+                                      y={box.ytl - (isFirst ? 6 : 22)}
+                                      fill="#ffffff"
+                                      fontSize="9.5"
+                                      fontWeight="black"
+                                      fontFamily="sans-serif"
+                                    >
+                                      {box.label}
+                                    </text>
+                                  </g>
                                 </g>
                               );
                             })}
                           </svg>
+                            
+                              );
+                            }}
+                          
+      </CustomZoomPanPinch>
                         </div>
 
                         {/* Visual label note & manual image uploader */}
@@ -1718,12 +1843,28 @@ export default function App() {
                 {/* Phần bảng chi tiết đã được xoá theo yêu cầu để nhường không gian cho Canvas SVG */}
 
               </div>
-            </div>
-
+            </motion.div>
           </div>
         )}
+      </AnimatePresence>
 
-      </main>
+      {/* Modal Preview */}
+      <AnimatePresence>
+        {selectedGroupId && selectedGroup && selectedFrameData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-full h-full max-w-7xl flex flex-col relative"
+            >
+              
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
 
       {/* App Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-400">
