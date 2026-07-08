@@ -41,10 +41,10 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
   }
 
   // Get labels
-  const labelNodes = doc.querySelectorAll('meta > project > labels > label > name, meta > task > labels > label > name');
+  const labelNodes = doc.querySelectorAll('meta > project > labels > label > name, meta > task > labels > label > name, labels > label > name');
   const labelsSet = new Set<string>();
   const labelColors: Record<string, string> = {};
-  const labelBlocks = doc.querySelectorAll('meta > project > labels > label, meta > task > labels > label');
+  const labelBlocks = doc.querySelectorAll('meta > project > labels > label, meta > task > labels > label, labels > label');
   labelBlocks.forEach(block => {
     const nameNode = block.querySelector('name');
     const colorNode = block.querySelector('color');
