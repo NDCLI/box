@@ -1486,10 +1486,10 @@ export default function App() {
                                 <div className="text-[10px] text-slate-500 font-mono leading-relaxed">
                                   {group.boxes.slice(0, 2).map((box, bIdx) => (
                                     <span key={box.id} className="block truncate">
-                                      <span className={bIdx === 0 ? 'text-emerald-600 font-bold' : 'text-rose-500 font-bold'}>
-                                        {bIdx === 0 ? '✓ giữ' : '✗ xoá'}
+                                      <span className="text-slate-600 font-bold mr-1">
+                                        #{box.globalIndex}
                                       </span>
-                                      {' '}{box.label}: [{box.xtl.toFixed(1)}, {box.ytl.toFixed(1)}, {box.xbr.toFixed(1)}, {box.ybr.toFixed(1)}]
+                                      {box.label}: [{box.xtl.toFixed(1)}, {box.ytl.toFixed(1)}, {box.xbr.toFixed(1)}, {box.ybr.toFixed(1)}]
                                     </span>
                                   ))}
                                   {group.boxes.length > 2 && (
@@ -1576,7 +1576,7 @@ export default function App() {
                       <Eye className="w-4.5 h-4.5 text-slate-500" />
                       <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
                         {selectedFrameData
-                          ? `Preview: ${selectedFrameData.name}`
+                          ? `Preview: Frame ${selectedFrameData.id}`
                           : 'Preview'
                         }
                       </h3>
@@ -1640,7 +1640,7 @@ export default function App() {
                               Đã tải ảnh thực tế từ ZIP
                             </span>
                           ) : zipEntries ? (
-                            <span className="text-amber-400 font-sans font-medium">Không tìm thấy ảnh {selectedFrameData.name.split('/').pop()} trong ZIP</span>
+                            <span className="text-amber-400 font-sans font-medium">Không tìm thấy ảnh Frame {selectedFrameData.id} trong ZIP</span>
                           ) : (
                             <span className="text-slate-500 font-sans">Chỉ có file XML (Vẽ mô phỏng)</span>
                           )}
@@ -1652,7 +1652,7 @@ export default function App() {
                             <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center z-20">
                               <Loader2 className="w-8 h-8 text-red-500 animate-spin mb-2" />
                               <p className="text-xs text-slate-300 font-bold font-sans">Đang giải nén ảnh...</p>
-                              <p className="text-[10px] text-slate-500 mt-0.5 font-mono truncate max-w-xs">{selectedFrameData.name}</p>
+                              <p className="text-[10px] text-slate-500 mt-0.5 font-mono truncate max-w-xs">Frame {selectedFrameData.id}</p>
                             </div>
                           )}
 
@@ -1783,7 +1783,7 @@ export default function App() {
                                       fontWeight="black"
                                       fontFamily="sans-serif"
                                     >
-                                      {box.label}
+                                      #{box.globalIndex} {box.label}
                                     </text>
                                   </g>
                                 </g>
