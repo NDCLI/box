@@ -1616,47 +1616,49 @@ export default function App() {
                       </h3>
                     </div>
 
-                    <button 
-  onClick={() => setSelectedGroupId(null)}
-  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors mr-2"
-  title="Đóng Preview"
->
-  <X className="w-5 h-5" />
-</button>
-{selectedFrameData && (
-                      <div className="flex items-center space-x-2">
-                        {/* Zoom to duplicates toggle with dynamic padding slider */}
-                        <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
-                          <button
-                            onClick={() => {
-                              if (transformComponentRef.current) {
-                                transformComponentRef.current.zoomToElement('duplicate-group-bounds', undefined, 800, 'easeOut');
-                              }
-                            }}
-                            className="p-1 rounded-md text-xs font-bold transition-all flex items-center space-x-1 bg-white text-blue-700 shadow-2xs border border-slate-200 hover:bg-slate-50"
-                            title="Di chuyển đến vị trí lỗi trên ảnh"
-                          >
-                            <Maximize2 className="w-3.5 h-3.5 text-blue-600" />
-                            <span className="hidden sm:inline">Đến vị trí lỗi</span>
-                          </button>
-                          <div className="flex items-center space-x-1 pl-1.5 border-l border-slate-200">
-                            <input
-                              type="range"
-                              min="10"
-                              max="400"
-                              step="5"
-                              value={customZoomPadding}
-                              onChange={(e) => setCustomZoomPadding(parseInt(e.target.value, 10))}
-                              className="w-12 sm:w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                              title="Kéo về trái để zoom siêu gần sát đối tượng nhỏ (giảm khoảng đệm)"
-                            />
-                            <span className="text-[9px] sm:text-[10px] font-mono font-semibold text-slate-600 w-11 text-right" title="Khoảng cách lề bao quanh đối tượng (px). Càng nhỏ thì zoom càng cận!">
-                              ±{customZoomPadding}px
-                            </span>
+                    <div className="flex items-center space-x-3">
+                      {selectedFrameData && (
+                        <div className="flex items-center space-x-2">
+                          {/* Zoom to duplicates toggle with dynamic padding slider */}
+                          <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                            <button
+                              onClick={() => {
+                                if (transformComponentRef.current) {
+                                  transformComponentRef.current.zoomToElement('duplicate-group-bounds', undefined, 800, 'easeOut');
+                                }
+                              }}
+                              className="p-1 rounded-md text-xs font-bold transition-all flex items-center space-x-1 bg-white text-blue-700 shadow-2xs border border-slate-200 hover:bg-slate-50"
+                              title="Di chuyển đến vị trí lỗi trên ảnh"
+                            >
+                              <Maximize2 className="w-3.5 h-3.5 text-blue-600" />
+                              <span className="hidden sm:inline">Đến vị trí lỗi</span>
+                            </button>
+                            <div className="flex items-center space-x-1 pl-1.5 border-l border-slate-200">
+                              <input
+                                type="range"
+                                min="10"
+                                max="400"
+                                step="5"
+                                value={customZoomPadding}
+                                onChange={(e) => setCustomZoomPadding(parseInt(e.target.value, 10))}
+                                className="w-12 sm:w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                title="Kéo về trái để zoom siêu gần sát đối tượng nhỏ (giảm khoảng đệm)"
+                              />
+                              <span className="text-[9px] sm:text-[10px] font-mono font-semibold text-slate-600 w-11 text-right" title="Khoảng cách lề bao quanh đối tượng (px). Càng nhỏ thì zoom càng cận!">
+                                ±{customZoomPadding}px
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                      <button 
+                        onClick={() => setSelectedGroupId(null)}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"
+                        title="Đóng Preview"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* SVG drawing viewport */}
@@ -1702,6 +1704,11 @@ export default function App() {
                               const dynamicHighlightStrokeWidth = (2 / currentScale).toString();
                               const labelScale = Math.min(1, 1 / currentScale * 2);
 
+                              // Find all duplicate groups for this frame
+                              const frameDuplicateGroups = duplicateGroups.filter(g => g.frameId === selectedFrameData.id);
+                              const frameDuplicateBoxIds = new Set(frameDuplicateGroups.flatMap(g => g.boxes.map(b => b.id)));
+                              const allDuplicateBoxesInFrame = selectedFrameData.boxes.filter(b => frameDuplicateBoxIds.has(b.id));
+
                               return (
                             
                               <svg
@@ -1739,7 +1746,7 @@ export default function App() {
 
                             {/* DRAW ALL OTHER BOXES on this frame (Non-duplicates) */}
                             {selectedFrameData.boxes
-                              .filter(b => !selectedGroup.boxes.some(gb => gb.id === b.id))
+                              .filter(b => !frameDuplicateBoxIds.has(b.id))
                               .map(box => (
                                 <g key={box.id} className="opacity-30">
                                   <rect
@@ -1769,9 +1776,9 @@ export default function App() {
                                 </g>
                               ))}
 
-                            {/* DRAW THE DUPLICATE BOX GROUP (High contrast highlighted) */}
-                            {selectedGroup.boxes.map((box, idx) => {
-                              const isFirst = idx === 0;
+                            {/* DRAW ALL DUPLICATE BOX GROUPS in this frame (High contrast highlighted) */}
+                            {allDuplicateBoxesInFrame.map((box, idx) => {
+                              const isFirst = idx % 2 === 0;
                               const isHovered = hoveredBoxId === box.id;
 
                               // Highlight duplicate group only; app no longer marks keep/delete boxes.
@@ -1831,11 +1838,7 @@ export default function App() {
       </CustomZoomPanPinch>
                         </div>
 
-                        {/* Visual label note & manual image uploader */}
-
-                          
-                          
-                        </div>
+                        {/* Visual label note & manual image uploader removed */}
 
                       </div>
                     ) : (
