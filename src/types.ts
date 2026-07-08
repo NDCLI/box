@@ -21,6 +21,7 @@ export interface CVATBox {
   trackId?: string;
   // XML DOM Node reference or path to help recreate/clean
   originalIndex: number; 
+  globalIndex: number;
 }
 
 export interface CVATFrameData {
@@ -35,6 +36,7 @@ export interface CVATDataset {
   filename: string;
   taskName?: string;
   labels: string[];
+  labelColors?: Record<string, string>;
   type: 'images' | 'tracks';
   frames: CVATFrameData[];
 }
