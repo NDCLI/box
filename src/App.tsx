@@ -295,6 +295,16 @@ export default function App() {
   const [frameRangeStart, setFrameRangeStart] = useState<string>('');
   const [frameRangeEnd, setFrameRangeEnd] = useState<string>('');
 
+  useEffect(() => {
+    if (dataset && dataset.frames.length > 0) {
+      const ids = dataset.frames.map(f => parseInt(f.id, 10)).filter(n => !isNaN(n));
+      if (ids.length > 0) {
+        setFrameRangeStart(String(Math.min(...ids)));
+        setFrameRangeEnd(String(Math.max(...ids)));
+      }
+    }
+  }, [dataset]);
+
   // Exclude labels configuration
   const [excludeLabels, setExcludeLabels] = useState<string[]>(() => {
     try {
@@ -1130,9 +1140,9 @@ export default function App() {
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:bg-white transition-all font-mono"
                       />
                     </div>
-                    {(frameRangeStart !== '' || frameRangeEnd !== '') && (
+                    {(frameRangeStart !== String(frameRange.min) || frameRangeEnd !== String(frameRange.max)) && (
                       <button
-                        onClick={() => { setFrameRangeStart(''); setFrameRangeEnd(''); }}
+                        onClick={() => { setFrameRangeStart(String(frameRange.min)); setFrameRangeEnd(String(frameRange.max)); }}
                         className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors"
                         title="Xóa bộ lọc vùng frame"
                       >
@@ -1692,7 +1702,7 @@ export default function App() {
                                     width={box.xbr - box.xtl}
                                     height={box.ybr - box.ytl}
                                     fill="none"
-                                    stroke="#475569"
+                                    stroke={dataset.labelColors?.[box.label] || "#475569"}
                                     strokeWidth={dynamicStrokeWidth}
                                     vectorEffect="non-scaling-stroke"
                                     strokeDasharray="4,4"
@@ -1719,7 +1729,7 @@ export default function App() {
                               const isHovered = hoveredBoxId === box.id;
 
                               // Highlight duplicate group only; app no longer marks keep/delete boxes.
-                              const color = '#38bdf8';
+                              const color = dataset?.labelColors?.[box.label] || '#38bdf8';
                               const strokeWidth = dynamicHighlightStrokeWidth;
 
                               return (
@@ -1735,7 +1745,7 @@ export default function App() {
                                     y={box.ytl}
                                     width={box.xbr - box.xtl}
                                     height={box.ybr - box.ytl}
-                                    fill="rgba(56,189,248,0.06)"
+                                    fill={color + "1a"}
                                     stroke={color}
                                     strokeWidth={strokeWidth}
                                     vectorEffect="non-scaling-stroke"
