@@ -42,10 +42,31 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
 
   // Get labels
   const labelNodes = doc.querySelectorAll('meta > project > labels > label > name, meta > task > labels > label > name');
-  const labels: string[] = [];
-  labelNodes.forEach(node => {
-    if (node.textContent) labels.push(node.textContent.trim());
+  const labelsSet = new Set<string>();
+  const labelColors: Record<string, string> = {};
+  const labelBlocks = doc.querySelectorAll('meta > project > labels > label, meta > task > labels > label');
+  labelBlocks.forEach(block => {
+    const nameNode = block.querySelector('name');
+    const colorNode = block.querySelector('color');
+    if (nameNode && nameNode.textContent) {
+      const name = nameNode.textContent.trim();
+      labelsSet.add(name);
+      if (colorNode && colorNode.textContent) {
+        labelColors[name] = colorNode.textContent.trim();
+      }
+    }
   });
+  
+  // Backup: if meta doesn't have labels, scan boxes
+  if (labelsSet.size === 0) {
+    const allBoxes = doc.querySelectorAll('box');
+    allBoxes.forEach(box => {
+      const l = box.getAttribute('label');
+      if (l) labelsSet.add(l);
+    });
+  }
+  
+  const labels = Array.from(labelsSet);
 
   const taskNameNode = doc.querySelector('meta > task > name, meta > project > name');
   const taskName = taskNameNode ? taskNameNode.textContent || undefined : undefined;
@@ -89,7 +110,8 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
         });
 
         const parsedBoxId = boxNode.getAttribute('id');
-        const finalBoxId = parsedBoxId ? parsedBoxId : String(absoluteBoxIdx++);
+        const currentGlobalIndex = absoluteBoxIdx++;
+        const finalBoxId = parsedBoxId ? parsedBoxId : String(currentGlobalIndex);
 
         boxes.push({
           id: finalBoxId,
@@ -103,7 +125,8 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
           group_id,
           source,
           attributes,
-          originalIndex: boxIdx
+          originalIndex: boxIdx,
+          globalIndex: currentGlobalIndex
         });
       });
 
@@ -160,7 +183,8 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
         }
 
         const parsedBoxId = boxNode.getAttribute('id');
-        const finalBoxId = parsedBoxId ? parsedBoxId : String(absoluteBoxIdx++);
+        const currentGlobalIndex = absoluteBoxIdx++;
+        const finalBoxId = parsedBoxId ? parsedBoxId : String(currentGlobalIndex);
 
         frameMap[frameId].boxes.push({
           id: finalBoxId,
@@ -174,7 +198,8 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
           keyframe,
           trackId,
           attributes,
-          originalIndex: boxIdx
+          originalIndex: boxIdx,
+          globalIndex: currentGlobalIndex
         });
       });
     });
@@ -203,6 +228,7 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
     taskName,
     labels: labels.length > 0 ? labels : Array.from(new Set(frames.flatMap(f => f.boxes.map(b => b.label)))),
     type,
+    labelColors,
     frames
   };
 }
@@ -320,45 +346,45 @@ export function removeDuplicatesFromXML(
     });
   });
 
-  if (dataset.type === 'images') {
-    // Process image nodes
-    const imageNodes = doc.querySelectorAll('image');
-    imageNodes.forEach((imgNode, imgIdx) => {
-      const frameId = imgNode.getAttribute('id') || String(imgIdx);
-      const boxNodes = imgNode.querySelectorAll('box');
+  let absoluteBoxIdx = 1;
+  const nodesToDelete: Element[] = [];
 
-      // Loop backwards to avoid index shifting problems when deleting
-      for (let boxIdx = boxNodes.length - 1; boxIdx >= 0; boxIdx--) {
-        const boxId = `img-${frameId}-box-${boxIdx}`;
-        if (boxIdsToDelete.has(boxId)) {
-          const nodeToRemove = boxNodes[boxIdx];
-          if (nodeToRemove && nodeToRemove.parentNode) {
-            nodeToRemove.parentNode.removeChild(nodeToRemove);
-          }
+  if (dataset.type === 'images') {
+    const imageNodes = doc.querySelectorAll('image');
+    imageNodes.forEach((imgNode) => {
+      const boxNodes = imgNode.querySelectorAll('box');
+      boxNodes.forEach((boxNode) => {
+        const parsedBoxId = boxNode.getAttribute('id');
+        const currentGlobalIndex = absoluteBoxIdx++;
+        const finalBoxId = parsedBoxId ? parsedBoxId : String(currentGlobalIndex);
+
+        if (boxIdsToDelete.has(finalBoxId)) {
+          nodesToDelete.push(boxNode);
         }
-      }
+      });
     });
   } else {
-    // Process track-based XML
-    // Track nodes have boxes. Each box inside track has frame attribute and index.
     const trackNodes = doc.querySelectorAll('track');
     trackNodes.forEach((trackNode) => {
-      const trackId = trackNode.getAttribute('id') || '';
       const boxNodes = trackNode.querySelectorAll('box');
+      boxNodes.forEach((boxNode) => {
+        const parsedBoxId = boxNode.getAttribute('id');
+        const currentGlobalIndex = absoluteBoxIdx++;
+        const finalBoxId = parsedBoxId ? parsedBoxId : String(currentGlobalIndex);
 
-      for (let boxIdx = boxNodes.length - 1; boxIdx >= 0; boxIdx--) {
-        const boxNode = boxNodes[boxIdx];
-        const frameId = boxNode.getAttribute('frame') || '0';
-        const boxId = `track-${trackId}-frame-${frameId}`;
-
-        if (boxIdsToDelete.has(boxId)) {
-          if (boxNode && boxNode.parentNode) {
-            boxNode.parentNode.removeChild(boxNode);
-          }
+        if (boxIdsToDelete.has(finalBoxId)) {
+          nodesToDelete.push(boxNode);
         }
-      }
+      });
     });
   }
+
+  // Now delete them safely
+  nodesToDelete.forEach(node => {
+    if (node && node.parentNode) {
+      node.parentNode.removeChild(node);
+    }
+  });
 
   const serializer = new XMLSerializer();
   return serializer.serializeToString(doc);
