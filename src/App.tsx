@@ -1832,8 +1832,7 @@ export default function App() {
                         </div>
 
                         {/* Visual label note & manual image uploader */}
-                        <div className="self-center flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400 bg-slate-900/60 px-4 py-2 rounded-full border border-slate-800 backdrop-blur-xs z-10">
-                          <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-xs bg-sky-400 mr-1.5"></span>Label hiển thị trên box</span>
+
                           
                           
                         </div>
