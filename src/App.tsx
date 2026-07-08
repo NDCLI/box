@@ -625,23 +625,27 @@ export default function App() {
   }, [dataset]);
 
   // Filter duplicate groups based on search term and labels
-  const filteredDuplicateGroups = useMemo(() => {
+  const baseFilteredGroups = useMemo(() => {
     return duplicateGroups.filter(group => {
       // Search matches frame name/id
       const matchesSearch = group.frameName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         group.frameId.toString().includes(searchTerm);
-
-      // Label filter matches if any box in the group has a selected label
-      const hasSelectedLabel = group.boxes.some(box => selectedLabels.includes(box.label));
 
       // Frame range filter
       const frameNum = parseInt(group.frameId, 10);
       const startOk = frameRangeStart === '' || isNaN(parseInt(frameRangeStart, 10)) || frameNum >= parseInt(frameRangeStart, 10);
       const endOk = frameRangeEnd === '' || isNaN(parseInt(frameRangeEnd, 10)) || frameNum <= parseInt(frameRangeEnd, 10);
 
-      return matchesSearch && hasSelectedLabel && startOk && endOk;
+      return matchesSearch && startOk && endOk;
     });
-  }, [duplicateGroups, searchTerm, selectedLabels, frameRangeStart, frameRangeEnd]);
+  }, [duplicateGroups, searchTerm, frameRangeStart, frameRangeEnd]);
+
+  const filteredDuplicateGroups = useMemo(() => {
+    if (selectedLabels.length === 0) return baseFilteredGroups;
+    return baseFilteredGroups.filter(group => 
+      group.boxes.some(box => selectedLabels.includes(box.label))
+    );
+  }, [baseFilteredGroups, selectedLabels]);
 
   // Paginated duplicate groups
   const paginatedGroups = useMemo(() => {
@@ -971,7 +975,7 @@ export default function App() {
             </div>
 
             {/* Right side: Instructions and info */}
-            <div className="lg:col-span-12 bg-slate-900 text-white rounded-3xl p-8 flex flex-col justify-between shadow-xl shadow-slate-200 relative overflow-hidden">
+            <div className="lg:col-span-5 bg-slate-900 text-white rounded-3xl p-8 flex flex-col justify-between shadow-xl shadow-slate-200 relative overflow-hidden">
               <div className="absolute top-0 right-0 transform translate-x-20 -translate-y-20 w-80 h-80 bg-red-500/10 rounded-full blur-3xl"></div>
 
               <div>
@@ -1393,7 +1397,15 @@ export default function App() {
                     <div className="flex flex-wrap gap-1 max-h-[72px] overflow-y-auto pr-1">
                       {dataset.labels.map(label => {
                         const isSelected = selectedLabels.includes(label);
-                        const countInDuplicates = duplicateGroups.filter(g => g.boxes.some(b => b.label === label)).length;
+                        const countInDuplicates = baseFilteredGroups.reduce((sum, g) => {
+                          const matches = g.boxes.filter(b => b.label === label);
+                          if (matches.length > 1) {
+                            return sum + (matches.length - 1);
+                          } else if (matches.length === 1 && g.boxes.length > 1 && !settings.matchLabelOnly) {
+                            return sum + 1;
+                          }
+                          return sum;
+                        }, 0);
 
                         if (countInDuplicates === 0) return null; // Only show labels that actually have duplicates
 
