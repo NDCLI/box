@@ -6,7 +6,7 @@ import posthog from 'posthog-js';
 
 // Initialize PostHog if key is present
 if (import.meta.env.VITE_POSTHOG_KEY) {
-  console.log("Initializing PostHog...");
+  console.log("Initializing PostHog on Vercel...");
   let posthogHost = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
   if (!posthogHost.startsWith('http')) {
     posthogHost = 'https://' + posthogHost;
