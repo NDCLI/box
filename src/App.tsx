@@ -42,11 +42,13 @@ function CustomZoomPanPinch({
   onZoomToElementRef 
 }) {
   const stageRef = useRef(null);
+  const contentRef = useRef(null);
   const dragRef = useRef(null);
   const txRef = useRef({ scale: 1, panX: 0, panY: 0 });
   const [tx, setTx] = useState({ scale: 1, panX: 0, panY: 0 });
-  const [isAnimating, setIsAnimating] = useState(false);
   const animTimeoutRef = useRef(null);
+  const settleTimeoutRef = useRef(null);
+  const frameRef = useRef(null);
 
   const MIN_ZOOM = 0.05;
   const MAX_ZOOM = 50;
@@ -68,7 +70,34 @@ function CustomZoomPanPinch({
     return { scale, panX: constrainedPanX, panY: constrainedPanY };
   }
 
-  function updateTx(nextTx, animated = false) {
+  function paintTx(nextTx, animated = false, duration = 600) {
+    const content = contentRef.current;
+    if (!content) return;
+
+    content.style.transition = animated
+      ? `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`
+      : 'none';
+    content.style.transform = `translate3d(${nextTx.panX}px, ${nextTx.panY}px, 0) scale(${nextTx.scale})`;
+  }
+
+  function schedulePaint() {
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      paintTx(txRef.current, false);
+    });
+  }
+
+  function commitTx() {
+    setTx({ ...txRef.current });
+  }
+
+  function scheduleCommit(delay = 120) {
+    if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+    settleTimeoutRef.current = setTimeout(commitTx, delay);
+  }
+
+  function updateTx(nextTx, animated = false, duration = 600) {
     if (!nextTx || isNaN(nextTx.scale) || isNaN(nextTx.panX) || isNaN(nextTx.panY)) {
       console.error('Invalid zoom Tx', nextTx);
       return;
@@ -78,17 +107,20 @@ function CustomZoomPanPinch({
       nextTx = constrainViewerPan(nextTx, stage);
     }
     
-    if (animated) {
-      setIsAnimating(true);
-      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
-      animTimeoutRef.current = setTimeout(() => setIsAnimating(false), 800);
-    } else {
-      setIsAnimating(false);
-      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
-    }
-    
     txRef.current = nextTx;
-    setTx(nextTx);
+
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    paintTx(nextTx, animated, duration);
+
+    if (animated) {
+      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
+      animTimeoutRef.current = setTimeout(commitTx, duration);
+    } else {
+      commitTx();
+    }
   }
 
   useEffect(() => {
@@ -136,7 +168,7 @@ function CustomZoomPanPinch({
               const newPanX = stageBounds.width / 2 - (x + width / 2) * newScale;
               const newPanY = stageBounds.height / 2 - (y + height / 2) * newScale;
               
-              updateTx({ scale: newScale, panX: newPanX, panY: newPanY }, true); // animate!
+              updateTx({ scale: newScale, panX: newPanX, panY: newPanY }, true, duration);
             }
           }
         }
@@ -173,14 +205,19 @@ function CustomZoomPanPinch({
       const ix = (cx - panX) / scale;
       const iy = (cy - panY) / scale;
 
-      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+      // Keep high-resolution trackpads smooth and prevent mouse-wheel jumps.
+      const deltaMultiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.height : 1;
+      const normalizedDelta = Math.max(-120, Math.min(120, event.deltaY * deltaMultiplier));
+      const zoomFactor = Math.exp(-normalizedDelta * 0.0018);
       let newScale = scale * zoomFactor;
       newScale = Math.min(Math.max(newScale, MIN_ZOOM), MAX_ZOOM);
 
       const newPanX = cx - ix * newScale;
       const newPanY = cy - iy * newScale;
 
-      updateTx({ scale: newScale, panX: newPanX, panY: newPanY }, false);
+      txRef.current = constrainViewerPan({ scale: newScale, panX: newPanX, panY: newPanY }, stage);
+      schedulePaint();
+      scheduleCommit();
     }
 
     stage.addEventListener('wheel', onWheel, { passive: false });
@@ -200,13 +237,21 @@ function CustomZoomPanPinch({
     dragRef.current = { lastX: event.clientX, lastY: event.clientY };
     
     const { scale, panX, panY } = txRef.current;
-    updateTx({ scale, panX: panX + dx, panY: panY + dy }, false);
+    txRef.current = constrainViewerPan({ scale, panX: panX + dx, panY: panY + dy }, stageRef.current);
+    schedulePaint();
   }
 
   function handleMouseUp() {
+    if (dragRef.current) commitTx();
     dragRef.current = null;
     document.body.style.cursor = '';
   }
+
+  useEffect(() => () => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
+    if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+  }, []);
 
   function handleDoubleClick(event) {
     const stage = stageRef.current;
@@ -234,16 +279,17 @@ function CustomZoomPanPinch({
       onMouseLeave={handleMouseUp}
       onDoubleClick={handleDoubleClick}
     >
-      <div 
+      <div
+        ref={contentRef}
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
-          transform: `translate(${tx.panX}px, ${tx.panY}px) scale(${tx.scale})`,
           transformOrigin: '0 0',
           width: contentWidth ? `${contentWidth}px` : '100%',
           height: contentHeight ? `${contentHeight}px` : '100%',
-          transition: isAnimating ? 'transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
+          willChange: 'transform',
+          backfaceVisibility: 'hidden',
         }}
       >
         {children({ state: { scale: tx.scale } })}
@@ -1284,7 +1330,7 @@ export default function App() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
               <div className="flex items-center space-x-2 text-slate-800 pb-3 border-b border-slate-100">
                 <Settings className="w-5 h-5 text-slate-500" />
-                <h3 className="font-bold">Cấu hình quét trùng lặp</h3>
+                <h3 className="font-bold">Cấu hình quét trùng lặp (Thử cả 2 tiêu chí để tránh bỏ sót)</h3>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
