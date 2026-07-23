@@ -11,10 +11,10 @@ if (import.meta.env.VITE_POSTHOG_KEY) {
   if (!posthogHost.startsWith('http')) {
     posthogHost = 'https://' + posthogHost;
   }
-  
+
   posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
     api_host: posthogHost,
-    loaded: (posthog) => {
+    loaded: (_ph) => {
       console.log("PostHog loaded successfully!");
     }
   });
