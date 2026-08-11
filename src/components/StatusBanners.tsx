@@ -21,7 +21,7 @@ function StatusBanners({
     <>
       {/* Global loading state */}
       {isLoading && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-12 flex flex-col items-center justify-center shadow-xs">
+        <div className="app-panel bg-white rounded-3xl border border-slate-200 p-12 flex flex-col items-center justify-center shadow-xs">
           <RefreshCw className="w-10 h-10 text-red-500 animate-spin mb-4" />
           <h4 className="text-lg font-semibold text-slate-800">Đang đọc và xử lý tệp dữ liệu...</h4>
           <p className="text-sm text-slate-500 mt-1">Quá trình này có thể mất vài giây tùy thuộc vào dung lượng file.</p>

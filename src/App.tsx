@@ -140,10 +140,10 @@ export default function App() {
 
   // ── Render ──
   return (
-    <div className="dark-theme min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased">
+    <div className="app-shell dark-theme min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased">
       <Header />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="app-main flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Upload Zone (shown when no dataset loaded) */}
         {!fp.dataset && (
           <UploadZone

@@ -12,7 +12,7 @@ interface StatsGridProps {
 
 export default function StatsGrid({ stats }: StatsGridProps) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
+    <div className="app-stats-grid grid grid-cols-2 lg:grid-cols-7 gap-4">
 
       <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4 shadow-xs border-l-4 border-l-blue-500 flex flex-col justify-center">
         <span className="text-xs font-bold text-blue-700 block uppercase tracking-wider">First ID</span>

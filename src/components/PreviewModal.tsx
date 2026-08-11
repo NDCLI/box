@@ -79,9 +79,9 @@ export default function PreviewModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-slate-950/80 backdrop-blur-sm">
+    <div className="app-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-slate-950/80 backdrop-blur-sm">
       <div
-        className="w-full h-full max-w-7xl flex flex-col relative bg-white rounded-3xl shadow-2xl overflow-hidden animate-[modalIn_0.2s_ease-out_both]"
+        className="app-modal w-full h-full max-w-7xl flex flex-col relative bg-white rounded-3xl shadow-2xl overflow-hidden animate-[modalIn_0.2s_ease-out_both]"
       >
 
         {/* Right Column: Visual Inspector & Comparison table */}

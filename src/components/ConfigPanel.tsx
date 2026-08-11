@@ -33,7 +33,7 @@ export default function ConfigPanel({
   return (
     <>
       {/* Global Config: Frame Range & Exclude */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
+      <div className="app-panel bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
         <div className="flex items-center space-x-2 text-slate-800 pb-3 border-b border-slate-100">
           <Settings className="w-5 h-5 text-slate-500" />
           <h3 className="font-bold">Cấu hình Kiểm tra & Loại trừ Box</h3>
@@ -112,7 +112,7 @@ export default function ConfigPanel({
       </div>
 
       {/* Config & Audit Tool Controls */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
+      <div className="app-panel bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
         <div className="flex items-center space-x-2 text-slate-800 pb-3 border-b border-slate-100">
           <Settings className="w-5 h-5 text-slate-500" />
           <h3 className="font-bold">Cấu hình quét trùng lặp (Thử cả 2 tiêu chí để tránh bỏ sót)</h3>

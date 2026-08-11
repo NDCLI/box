@@ -1,43 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CVAT Box Counter icon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CVAT Duplicate Box Inspector">
   <defs>
-    <radialGradient id="bg" cx="28%" cy="20%" r="88%">
-      <stop offset="0" stop-color="#38bdf8"/>
-      <stop offset="0.42" stop-color="#2563eb"/>
-      <stop offset="1" stop-color="#070a12"/>
-    </radialGradient>
-    <linearGradient id="box" x1="96" y1="112" x2="416" y2="400" gradientUnits="userSpaceOnUse">
+    <linearGradient id="background" x1="72" y1="48" x2="438" y2="464" gradientUnits="userSpaceOnUse">
       <stop stop-color="#22d3ee"/>
-      <stop offset="0.55" stop-color="#a78bfa"/>
-      <stop offset="1" stop-color="#34d399"/>
+      <stop offset="0.42" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#7c3aed"/>
     </linearGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="10" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+    <linearGradient id="accent" x1="170" y1="150" x2="388" y2="382" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#fb7185"/>
+    </linearGradient>
   </defs>
-
-  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
-  <path d="M82 178c0-53 43-96 96-96h156c53 0 96 43 96 96v156c0 53-43 96-96 96H178c-53 0-96-43-96-96V178Z" fill="#0f172a" opacity=".74"/>
-
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
-    <rect x="124" y="142" width="184" height="184" rx="24" stroke="url(#box)" stroke-width="28"/>
-    <rect x="204" y="206" width="184" height="184" rx="24" stroke="#f59e0b" stroke-width="28" opacity=".94"/>
-  </g>
-
+  <rect width="512" height="512" rx="118" fill="#070b14"/>
+  <rect x="20" y="20" width="472" height="472" rx="102" fill="url(#background)"/>
+  <rect x="42" y="42" width="428" height="428" rx="86" fill="#08111f" fill-opacity=".9" stroke="#fff" stroke-opacity=".16" stroke-width="4"/>
+  <rect x="112" y="116" width="218" height="218" rx="28" fill="#38bdf8" fill-opacity=".12" stroke="#67e8f9" stroke-width="24"/>
+  <rect x="190" y="184" width="210" height="210" rx="28" fill="#fb7185" fill-opacity=".12" stroke="url(#accent)" stroke-width="24"/>
   <g fill="#f8fafc">
-    <circle cx="124" cy="142" r="15"/>
-    <circle cx="308" cy="142" r="15"/>
-    <circle cx="124" cy="326" r="15"/>
-    <circle cx="308" cy="326" r="15"/>
-    <circle cx="204" cy="206" r="15"/>
-    <circle cx="388" cy="206" r="15"/>
-    <circle cx="204" cy="390" r="15"/>
-    <circle cx="388" cy="390" r="15"/>
+    <circle cx="112" cy="116" r="13"/><circle cx="330" cy="116" r="13"/>
+    <circle cx="112" cy="334" r="13"/><circle cx="330" cy="334" r="13"/>
+    <circle cx="190" cy="184" r="13"/><circle cx="400" cy="184" r="13"/>
+    <circle cx="190" cy="394" r="13"/><circle cx="400" cy="394" r="13"/>
   </g>
-
-  <path d="M256 88v336" stroke="#e0f2fe" stroke-width="10" stroke-linecap="round" opacity=".42" stroke-dasharray="20 22"/>
-  <text x="256" y="286" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="76" font-weight="900" fill="#ffffff" letter-spacing="-4">IoU</text>
+  <path d="m229 273 37 37 76-88" fill="none" stroke="#fff" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

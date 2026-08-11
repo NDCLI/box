@@ -34,7 +34,7 @@ export default function UploadZone({
       className="grid grid-cols-1 lg:grid-cols-12 gap-6"
     >
       {/* Left side: Upload card */}
-      <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col justify-between min-h-[420px]">
+      <div className="app-panel app-upload-card lg:col-span-7 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col justify-between min-h-[420px]">
         <div>
           <h3 className="text-lg font-bold text-slate-900 mb-2">Tải tệp dữ liệu lên</h3>
           <p className="text-sm text-slate-500 mb-6">
@@ -45,11 +45,20 @@ export default function UploadZone({
         {/* Drop area */}
         <div
           id="upload-dropzone"
+          role="button"
+          tabIndex={0}
+          aria-label="Chọn hoặc kéo thả tệp CVAT XML hay ZIP"
           onClick={onUploadClick}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onUploadClick();
+            }
+          }}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
-          className={`relative border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer transition-all duration-200 group ${isDragging
+          className={`app-dropzone relative border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer transition-all duration-200 group ${isDragging
             ? 'border-red-500 bg-red-50/40 scale-[0.99]'
             : 'border-slate-300 hover:border-red-400 hover:bg-slate-50/50'
             }`}
@@ -92,7 +101,7 @@ export default function UploadZone({
       </div>
 
       {/* Right side: Instructions and info */}
-      <div className="lg:col-span-5 bg-slate-900 text-white rounded-3xl p-8 flex flex-col justify-between shadow-xl shadow-slate-200 relative overflow-hidden">
+      <div className="app-feature-card lg:col-span-5 bg-slate-900 text-white rounded-3xl p-8 flex flex-col justify-between shadow-xl shadow-slate-200 relative overflow-hidden">
         <div className="absolute top-0 right-0 transform translate-x-20 -translate-y-20 w-80 h-80 bg-red-500/10 rounded-full blur-3xl"></div>
 
         <div>

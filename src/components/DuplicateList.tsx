@@ -50,7 +50,7 @@ export default function DuplicateList({
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
 
       {/* Left Column: Duplicate Groups Directory */}
-      <div className="lg:col-span-12 bg-white rounded-3xl border border-slate-200 shadow-xs flex flex-col min-h-[600px]">
+      <div className="app-panel app-duplicate-list lg:col-span-12 bg-white rounded-3xl border border-slate-200 shadow-xs flex flex-col min-h-[600px]">
 
         {/* Search and Filters Header */}
         <div className="p-4 border-b border-slate-100 space-y-3 shrink-0">

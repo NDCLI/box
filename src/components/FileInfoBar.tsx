@@ -26,7 +26,7 @@ export default function FileInfoBar({
   onClose
 }: FileInfoBarProps) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="app-panel app-file-bar bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div className="flex items-center space-x-3.5">
         <div className="p-3 bg-red-50 rounded-xl text-red-500">
           {zipEntries ? <FileArchive className="w-6 h-6" /> : <FileCode className="w-6 h-6" />}
