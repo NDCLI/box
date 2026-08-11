@@ -1,5 +1,3 @@
-import React from 'react';
-
 function Header() {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs">
@@ -20,18 +18,9 @@ function Header() {
             <h1 className="text-xl font-bold tracking-tight text-slate-900">CVAT Box Counter & Duplicate Inspector</h1>
           </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <h2 className="text-xl font-bold tracking-tight">
-            <span className="font-sans font-medium text-slate-300">Build With Google AI Studio</span>
-          </h2>
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        </div>
       </div>
     </header>
   );
 }
-
-// Suppress unused import warning for React (needed for JSX in some configs)
-void React;
 
 export default Header;

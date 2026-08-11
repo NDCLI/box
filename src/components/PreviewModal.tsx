@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   Layers,
   X,
@@ -6,7 +6,7 @@ import {
   Eye,
   Loader2
 } from 'lucide-react';
-import CustomZoomPanPinch, { type ZoomState } from './CustomZoomPanPinch';
+import CustomZoomPanPinch, { type ZoomControls, type ZoomState } from './CustomZoomPanPinch';
 import { type CVATDataset, type CVATFrameData, type DuplicateGroup } from '../types';
 import { getLabelColor } from '../constants/colors';
 
@@ -33,8 +33,50 @@ export default function PreviewModal({
   onCustomZoomPaddingChange,
   onClose
 }: PreviewModalProps) {
-  const [, setHoveredBoxId] = useState<string | null>(null);
-  const transformComponentRef = useRef<any>(null);
+  const transformComponentRef = useRef<ZoomControls | null>(null);
+
+  const frameDuplicateBoxIds = useMemo(() => {
+    const ids = duplicateGroups
+      .filter(group => group.frameId === selectedFrameData.id)
+      .flatMap(group => group.boxes.map(box => box.id));
+    return new Set(ids);
+  }, [duplicateGroups, selectedFrameData.id]);
+
+  const regularBoxes = useMemo(
+    () => selectedFrameData.boxes.filter(box => !frameDuplicateBoxIds.has(box.id)),
+    [selectedFrameData.boxes, frameDuplicateBoxIds]
+  );
+
+  const duplicateBoxes = useMemo(
+    () => selectedFrameData.boxes.filter(box => frameDuplicateBoxIds.has(box.id)),
+    [selectedFrameData.boxes, frameDuplicateBoxIds]
+  );
+
+  const selectedGroupBounds = useMemo(() => {
+    if (selectedGroup.boxes.length === 0) return null;
+    const minX = Math.min(...selectedGroup.boxes.map(box => box.xtl));
+    const minY = Math.min(...selectedGroup.boxes.map(box => box.ytl));
+    const maxX = Math.max(...selectedGroup.boxes.map(box => box.xbr));
+    const maxY = Math.max(...selectedGroup.boxes.map(box => box.ybr));
+
+    return {
+      x: Math.max(0, minX - customZoomPadding),
+      y: Math.max(0, minY - customZoomPadding),
+      width: Math.max(0, maxX - minX + customZoomPadding * 2),
+      height: Math.max(0, maxY - minY + customZoomPadding * 2),
+    };
+  }, [selectedGroup.boxes, customZoomPadding]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-slate-950/80 backdrop-blur-sm">
@@ -146,11 +188,6 @@ export default function PreviewModal({
                         const dynamicHighlightStrokeWidth = (2 / currentScale).toString();
                         const labelScale = Math.min(1, 1 / currentScale * 2);
 
-                        // Find all duplicate groups for this frame
-                        const frameDuplicateGroups = duplicateGroups.filter(g => g.frameId === selectedFrameData.id);
-                        const frameDuplicateBoxIds = new Set(frameDuplicateGroups.flatMap(g => g.boxes.map(b => b.id)));
-                        const allDuplicateBoxesInFrame = selectedFrameData.boxes.filter(b => frameDuplicateBoxIds.has(b.id));
-
                         return (
 
                           <svg
@@ -174,12 +211,12 @@ export default function PreviewModal({
                           />
                         )}
 
-                        {selectedGroup && selectedFrameData && selectedGroup.boxes.length > 0 && (
+                        {selectedGroupBounds && (
                           <foreignObject id="duplicate-group-bounds"
-                            x={Math.max(0, Math.min(...selectedGroup.boxes.map(b => b.xtl)) - customZoomPadding)}
-                            y={Math.max(0, Math.min(...selectedGroup.boxes.map(b => b.ytl)) - customZoomPadding)}
-                            width={Math.max(0, Math.max(...selectedGroup.boxes.map(b => b.xbr)) - Math.min(...selectedGroup.boxes.map(b => b.xtl)) + customZoomPadding * 2)}
-                            height={Math.max(0, Math.max(...selectedGroup.boxes.map(b => b.ybr)) - Math.min(...selectedGroup.boxes.map(b => b.ytl)) + customZoomPadding * 2)}
+                            x={selectedGroupBounds.x}
+                            y={selectedGroupBounds.y}
+                            width={selectedGroupBounds.width}
+                            height={selectedGroupBounds.height}
                             pointerEvents="none"
                           >
                             <div style={{ width: '100%', height: '100%' }}></div>
@@ -187,9 +224,7 @@ export default function PreviewModal({
                         )}
 
                         {/* DRAW ALL OTHER BOXES on this frame (Non-duplicates) */}
-                        {selectedFrameData.boxes
-                          .filter(b => !frameDuplicateBoxIds.has(b.id))
-                          .map(box => (
+                        {regularBoxes.map(box => (
                             <g key={box.id} className="opacity-30">
                               <rect
                                 x={box.xtl}
@@ -219,7 +254,7 @@ export default function PreviewModal({
                           ))}
 
                         {/* DRAW ALL DUPLICATE BOX GROUPS in this frame (High contrast highlighted) */}
-                        {allDuplicateBoxesInFrame.map((box, idx) => {
+                        {duplicateBoxes.map((box, idx) => {
                           const isFirst = idx % 2 === 0;
 
                           // Highlight duplicate group only; app no longer marks keep/delete boxes.
@@ -230,8 +265,6 @@ export default function PreviewModal({
                             <g
                               key={box.id}
                               className="cursor-pointer transition-all"
-                              onMouseEnter={() => setHoveredBoxId(box.id)}
-                              onMouseLeave={() => setHoveredBoxId(null)}
                             >
                               {/* Bounding box rect */}
                               <rect

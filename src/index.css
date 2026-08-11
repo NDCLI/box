@@ -77,7 +77,7 @@ html, body, #root, .dark-theme {
 .dark-theme .text-slate-400,
 .dark-theme .text-gray-400 { color: var(--muted) !important; }
 .dark-theme .text-slate-300 { color: #d8dee9 !important; }
-.dark-theme .text-[10px], .dark-theme .text-[11px], .dark-theme .text-xs { text-shadow: none; }
+.dark-theme .text-\[10px\], .dark-theme .text-\[11px\], .dark-theme .text-xs { text-shadow: none; }
 
 .dark-theme input,
 .dark-theme select,

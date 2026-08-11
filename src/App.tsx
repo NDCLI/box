@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { lazy, Suspense, useState, useCallback } from 'react';
 
 // Hooks
 import { useFileProcessor } from './hooks/useFileProcessor';
@@ -14,7 +14,8 @@ import FileInfoBar from './components/FileInfoBar';
 import ConfigPanel from './components/ConfigPanel';
 import StatsGrid from './components/StatsGrid';
 import DuplicateList from './components/DuplicateList';
-import PreviewModal from './components/PreviewModal';
+
+const PreviewModal = lazy(() => import('./components/PreviewModal'));
 
 // Utils
 import { removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
@@ -217,17 +218,23 @@ export default function App() {
 
       {/* Preview Modal */}
       {detection.selectedGroup && detection.selectedFrameData && (
-        <PreviewModal
-          selectedGroup={detection.selectedGroup}
-          selectedFrameData={detection.selectedFrameData}
-          dataset={fp.dataset!}
-          duplicateGroups={detection.duplicateGroups}
-          currentImageSrc={frameImage.currentImageSrc}
-          imageLoading={frameImage.imageLoading}
-          customZoomPadding={customZoomPadding}
-          onCustomZoomPaddingChange={setCustomZoomPadding}
-          onClose={() => detection.setSelectedGroupId(null)}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/80 text-sm font-semibold text-slate-200">
+            Đang mở trình xem ảnh…
+          </div>
+        }>
+          <PreviewModal
+            selectedGroup={detection.selectedGroup}
+            selectedFrameData={detection.selectedFrameData}
+            dataset={fp.dataset!}
+            duplicateGroups={detection.duplicateGroups}
+            currentImageSrc={frameImage.currentImageSrc}
+            imageLoading={frameImage.imageLoading}
+            customZoomPadding={customZoomPadding}
+            onCustomZoomPaddingChange={setCustomZoomPadding}
+            onClose={() => detection.setSelectedGroupId(null)}
+          />
+        </Suspense>
       )}
 
       <Footer />

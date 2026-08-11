@@ -4,11 +4,20 @@ export interface ZoomState {
   scale: number;
 }
 
+export interface ZoomControls {
+  zoomToElement: (
+    elementId: string | HTMLElement,
+    padding?: number,
+    duration?: number,
+    easing?: string
+  ) => void;
+}
+
 interface CustomZoomPanPinchProps {
   children: (args: { state: ZoomState }) => React.ReactNode;
   contentWidth: number;
   contentHeight: number;
-  onZoomToElementRef: React.MutableRefObject<any>;
+  onZoomToElementRef: React.MutableRefObject<ZoomControls | null>;
 }
 
 interface Transform {
