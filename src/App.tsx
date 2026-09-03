@@ -28,6 +28,7 @@ export default function App() {
       return raw ? JSON.parse(raw) : [];
     } catch { return []; }
   });
+  const [skipFrameFilterEnabled, setSkipFrameFilterEnabled] = useState(true);
 
   const saveExcludeLabels = useCallback((labels: string[]) => {
     setExcludeLabels(labels);
@@ -55,6 +56,7 @@ export default function App() {
   const detection = useDuplicateDetection({
     dataset: fp.dataset,
     excludeLabels,
+    skipFrameFilterEnabled,
   });
 
   // ── Frame image loading hook ──
@@ -187,6 +189,8 @@ export default function App() {
               onFrameRangeEndChange={(v) => detection.setFrameRangeEnd(v)}
               excludeLabels={excludeLabels}
               onSaveExcludeLabels={saveExcludeLabels}
+              skipFrameFilterEnabled={skipFrameFilterEnabled}
+              onSkipFrameFilterEnabledChange={setSkipFrameFilterEnabled}
               settings={detection.settings}
               onSettingsChange={detection.setSettings}
             />

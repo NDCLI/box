@@ -5,6 +5,7 @@ import type { CVATDataset, CVATFrameData, DetectionSettings, DuplicateGroup } fr
 export interface UseDuplicateDetectionArgs {
   dataset: CVATDataset | null;
   excludeLabels: string[];
+  skipFrameFilterEnabled: boolean;
 }
 
 export interface DuplicateStats {
@@ -62,6 +63,7 @@ export interface UseDuplicateDetectionReturn {
 export function useDuplicateDetection({
   dataset,
   excludeLabels,
+  skipFrameFilterEnabled,
 }: UseDuplicateDetectionArgs): UseDuplicateDetectionReturn {
   // Settings state
   const [settings, setSettings] = useState<DetectionSettings>({
@@ -158,6 +160,7 @@ export function useDuplicateDetection({
     const labelCounts: Record<string, number> = {};
 
     let excludeCount = 0;
+    let finalExcludeCount = 0;
     let framesWithSkipCount = 0;
     const excludeSet = new Set(excludeLabels.map(x => x.toLowerCase()));
 
@@ -191,15 +194,20 @@ export function useDuplicateDetection({
         if (hasPassAttr) framePass = true;
       });
 
-      excludeCount += exclBoxes + frameExtraExclude;
       if (framePass) {
         excludeCount += f.boxes.length; // whole frame skipped
+        finalExcludeCount += f.boxes.length;
+        frameHasSkip = true;
+      } else if (skipFrameFilterEnabled && frameSkipLabelCount > 0) {
+        excludeCount += f.boxes.length;
+        finalExcludeCount += f.boxes.length - frameSkipLabelCount;
         frameHasSkip = true;
       } else {
-        excludeCount += frameSkipLabelCount;
+        excludeCount += exclBoxes + frameExtraExclude;
+        finalExcludeCount += exclBoxes + frameExtraExclude;
       }
 
-      if (frameHasSkip || frameSkipLabelCount > 0) {
+      if (frameHasSkip) {
         framesWithSkipCount++;
       }
     });
@@ -221,7 +229,7 @@ export function useDuplicateDetection({
     const totalDuplicates = relevantDuplicates.reduce((sum, g) => sum + (g.boxes.length - 1), 0);
     const affectedFramesCount = new Set(relevantDuplicates.map(g => g.frameId)).size;
     const duplicatePercent = totalBoxes > 0 ? (totalDuplicates / totalBoxes) * 100 : 0;
-    const finalCount = Math.max(0, totalBoxes - excludeCount);
+    const finalCount = Math.max(0, totalBoxes - finalExcludeCount);
 
     return {
       totalFrames,
@@ -238,7 +246,7 @@ export function useDuplicateDetection({
       totalValidBoxes: Math.max(0, totalBoxes - totalDuplicates),
       frameRange: { min: minDatasetFrame, max: maxDatasetFrame },
     };
-  }, [dataset, duplicateGroups, frameRangeStart, frameRangeEnd, excludeLabels]);
+  }, [dataset, duplicateGroups, frameRangeStart, frameRangeEnd, excludeLabels, skipFrameFilterEnabled]);
 
   // Filter duplicate groups based on search term and frame range
   const baseFilteredGroups = useMemo(() => {
