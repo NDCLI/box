@@ -169,7 +169,6 @@ export function useDuplicateDetection({
       let framePass = false;
       let frameSkipLabelCount = 0;
       let frameExtraExclude = 0;
-      let exclBoxes = 0;
 
       f.boxes.forEach(b => {
         const id = parseInt(b.id, 10);
@@ -180,9 +179,11 @@ export function useDuplicateDetection({
         labelCounts[b.label] = (labelCounts[b.label] || 0) + 1;
 
         const lbl = b.label.toLowerCase();
-        if (lbl === '_excl_area') exclBoxes++;
-        if (excludeSet.has(lbl)) frameExtraExclude++;
-        if (lbl.includes('skip')) frameSkipLabelCount++;
+        if (lbl.includes('skip')) {
+          frameSkipLabelCount++;
+        } else if (lbl === '_excl' || lbl === '_exclude' || lbl === '_excl_area' || excludeSet.has(lbl)) {
+          frameExtraExclude++;
+        }
 
         const hasPassAttr = b.attributes.some(
           a =>
@@ -197,12 +198,12 @@ export function useDuplicateDetection({
         finalExcludeCount += f.boxes.length;
         frameHasSkip = true;
       } else if (frameSkipLabelCount > 0) {
-        excludeCount += frameSkipLabelCount;
+        excludeCount += 1 + frameExtraExclude;
         finalExcludeCount += f.boxes.length - frameSkipLabelCount;
         frameHasSkip = true;
       } else {
-        excludeCount += exclBoxes + frameExtraExclude;
-        finalExcludeCount += exclBoxes + frameExtraExclude;
+        excludeCount += frameExtraExclude;
+        finalExcludeCount += frameExtraExclude;
       }
 
       if (frameHasSkip) {
