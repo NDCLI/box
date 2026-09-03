@@ -303,15 +303,6 @@ html, body, #root, .dark-theme {
 .dark-theme image { filter: contrast(1.05) saturate(1.05); }
 .dark-theme button.bg-white,
 .dark-theme .bg-white button { background: #151d2b !important; }
-.dark-theme .app-panel button.skip-frame-toggle {
-  background: #64748b !important;
-  box-shadow: 0 0 0 1px #94a3b8 !important;
-}
-.dark-theme .app-panel button.skip-frame-toggle.is-enabled {
-  background: var(--red) !important;
-  box-shadow: 0 0 0 1px #fda4af !important;
-}
-.dark-theme .app-panel .skip-frame-toggle-thumb { background: #f8fafc !important; }
 .dark-theme *::-webkit-scrollbar { width: 10px; height: 10px; }
 .dark-theme *::-webkit-scrollbar-thumb { background: #344158; border-radius: 999px; }
 .dark-theme *::-webkit-scrollbar-track { background: #080d18; }

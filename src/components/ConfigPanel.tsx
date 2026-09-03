@@ -13,8 +13,6 @@ interface ConfigPanelProps {
   onFrameRangeEndChange: (value: string) => void;
   excludeLabels: string[];
   onSaveExcludeLabels: (labels: string[]) => void;
-  skipFrameFilterEnabled: boolean;
-  onSkipFrameFilterEnabledChange: (enabled: boolean) => void;
   settings: DetectionSettings;
   onSettingsChange: (settings: DetectionSettings) => void;
 }
@@ -27,8 +25,6 @@ export default function ConfigPanel({
   onFrameRangeEndChange,
   excludeLabels,
   onSaveExcludeLabels,
-  skipFrameFilterEnabled,
-  onSkipFrameFilterEnabledChange,
   settings,
   onSettingsChange
 }: ConfigPanelProps) {
@@ -112,29 +108,6 @@ export default function ConfigPanel({
               </div>
             </div>
 
-            <div className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left ${skipFrameFilterEnabled
-                ? 'border-red-200 bg-red-50 text-red-700'
-                : 'border-slate-200 bg-slate-50 text-slate-500'
-                }`}
-              >
-              <div>
-                <span className="block text-xs font-bold">
-                  {skipFrameFilterEnabled ? 'Bỏ qua box trong Frame_Skip' : 'Đếm tất cả box'}
-                </span>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={skipFrameFilterEnabled}
-                aria-label={skipFrameFilterEnabled ? 'Bỏ qua box trong Frame_Skip' : 'Đếm tất cả box'}
-                onClick={() => onSkipFrameFilterEnabledChange(!skipFrameFilterEnabled)}
-                className={`skip-frame-toggle relative h-6 w-11 rounded-full p-0.5 transition-colors ${skipFrameFilterEnabled ? 'is-enabled' : ''}`}
-              >
-                <span
-                  className={`skip-frame-toggle-thumb block h-5 w-5 rounded-full shadow-sm transition-transform ${skipFrameFilterEnabled ? 'translate-x-5' : 'translate-x-0'}`}
-                />
-              </button>
-            </div>
           </div>
         </div>
       </div>
