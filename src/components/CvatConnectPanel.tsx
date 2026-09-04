@@ -23,6 +23,13 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     ? { mode: 'vercel' }
     : { mode: connectionMode, serverUrl, token };
 
+  const loadJobsForTask = async (id: number) => {
+    const loadedJobs = await listCvatJobs(connection(), id);
+    setJobs(loadedJobs);
+    setJobId(loadedJobs[0] ? String(loadedJobs[0].id) : '');
+    if (loadedJobs.length === 0) setError('Task này không có Job nào mà token có quyền đọc.');
+  };
+
   const handleListTasks = async () => {
     if (connectionMode !== 'vercel' && (!serverUrl.trim() || !token.trim())) {
       setError('Nhập URL CVAT và Personal Access Token trước.');
@@ -34,10 +41,15 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     try {
       const loadedTasks = await listCvatTasks(connection());
       setTasks(loadedTasks);
-      setTaskId(loadedTasks[0] ? String(loadedTasks[0].id) : '');
       setJobs([]);
       setJobId('');
-      if (loadedTasks.length === 0) setError('Không tìm thấy Task nào mà token có quyền đọc.');
+      if (loadedTasks.length === 0) {
+        setTaskId('');
+        setError('Không tìm thấy Task nào mà token có quyền đọc.');
+      } else {
+        setTaskId(String(loadedTasks[0].id));
+        await loadJobsForTask(loadedTasks[0].id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể kết nối tới CVAT. Kiểm tra cấu hình Vercel hoặc CORS.');
     } finally {
@@ -55,10 +67,25 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     setError(null);
     setIsLoading(true);
     try {
-      const loadedJobs = await listCvatJobs(connection(), id);
-      setJobs(loadedJobs);
-      setJobId(loadedJobs[0] ? String(loadedJobs[0].id) : '');
-      if (loadedJobs.length === 0) setError('Task này không có Job nào mà token có quyền đọc.');
+      await loadJobsForTask(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể tải danh sách Job từ CVAT.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTaskChange = async (value: string) => {
+    setTaskId(value);
+    setJobs([]);
+    setJobId('');
+    const id = Number(value);
+    if (!Number.isInteger(id) || id < 1) return;
+
+    setError(null);
+    setIsLoading(true);
+    try {
+      await loadJobsForTask(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải danh sách Job từ CVAT.');
     } finally {
@@ -126,7 +153,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
         <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-slate-600">
           Task
           {tasks.length > 0 ? (
-            <select value={taskId} onChange={(event) => { setTaskId(event.target.value); setJobs([]); setJobId(''); }} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <select value={taskId} onChange={(event) => void handleTaskChange(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm">
               {tasks.map(task => <option key={task.id} value={task.id}>#{task.id} — {task.name}</option>)}
             </select>
           ) : (

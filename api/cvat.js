@@ -36,13 +36,15 @@ export default async function handler(req, res) {
   let accept = 'application/vnd.cvat+json, application/json';
 
   if (resource === 'tasks') {
-    upstreamPath = '/tasks?limit=100';
+    upstreamPath = '/tasks?page_size=1000';
   } else if (resource === 'task' && taskId) {
     upstreamPath = `/tasks/${taskId}`;
   } else if (resource === 'annotations' && taskId) {
     upstreamPath = `/tasks/${taskId}/annotations`;
   } else if (resource === 'jobs' && taskId) {
-    upstreamPath = `/jobs?task_id=${taskId}&limit=100`;
+    upstreamPath = `/jobs?task_id=${taskId}&page_size=1000`;
+  } else if (resource === 'labels' && taskId) {
+    upstreamPath = `/labels?task_id=${taskId}&page_size=1000`;
   } else if (resource === 'job' && jobId) {
     upstreamPath = `/jobs/${jobId}`;
   } else if (resource === 'jobAnnotations' && jobId) {

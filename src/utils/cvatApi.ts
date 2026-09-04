@@ -16,7 +16,7 @@ export interface ElectronCvatConnection extends Omit<DirectCvatConnection, 'mode
 
 export type CvatConnection = DirectCvatConnection | VercelCvatConnection | ElectronCvatConnection;
 
-type CvatResource = 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobAnnotations' | 'jobFrame';
+type CvatResource = 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobAnnotations' | 'jobFrame' | 'labels';
 
 interface DesktopCvatResponse {
   status: number;
@@ -57,7 +57,7 @@ interface CvatLabel {
 
 interface CvatTask extends CvatTaskSummary {
   size?: number;
-  labels?: CvatLabel[];
+  labels?: unknown;
 }
 
 interface CvatJob extends CvatJobSummary {
@@ -144,9 +144,11 @@ async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T
 }
 
 function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame' | 'jobFrame'>; taskId?: number; jobId?: number } {
-  if (path === '/tasks?limit=100') return { resource: 'tasks' };
-  const jobsMatch = path.match(/^\/jobs\?task_id=(\d+)&limit=100$/);
+  if (path === '/tasks?page_size=1000') return { resource: 'tasks' };
+  const jobsMatch = path.match(/^\/jobs\?task_id=(\d+)&page_size=1000$/);
   if (jobsMatch) return { resource: 'jobs', taskId: Number(jobsMatch[1]) };
+  const labelsMatch = path.match(/^\/labels\?task_id=(\d+)&page_size=1000$/);
+  if (labelsMatch) return { resource: 'labels', taskId: Number(labelsMatch[1]) };
   const jobMatch = path.match(/^\/jobs\/(\d+)(\/annotations)?$/);
   if (jobMatch) return { resource: jobMatch[2] ? 'jobAnnotations' : 'job', jobId: Number(jobMatch[1]) };
   const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
@@ -163,13 +165,22 @@ async function requestDesktop(
 }
 
 export async function listCvatTasks(connection: CvatConnection): Promise<CvatTaskSummary[]> {
-  const data = await cvatFetch<CvatTaskSummary[] | { results?: CvatTaskSummary[] }>(connection, '/tasks?limit=100');
+  const data = await cvatFetch<CvatTaskSummary[] | { results?: CvatTaskSummary[] }>(connection, '/tasks?page_size=1000');
   return Array.isArray(data) ? data : data.results ?? [];
 }
 
 export async function listCvatJobs(connection: CvatConnection, taskId: number): Promise<CvatJobSummary[]> {
-  const data = await cvatFetch<CvatJobSummary[] | { results?: CvatJobSummary[] }>(connection, `/jobs?task_id=${taskId}&limit=100`);
+  const data = await cvatFetch<CvatJobSummary[] | { results?: CvatJobSummary[] }>(connection, `/jobs?task_id=${taskId}&page_size=1000`);
   return Array.isArray(data) ? data : data.results ?? [];
+}
+
+async function listCvatTaskLabels(connection: CvatConnection, taskId: number): Promise<CvatLabel[]> {
+  try {
+    const data = await cvatFetch<CvatLabel[] | { results?: CvatLabel[] }>(connection, `/labels?task_id=${taskId}&page_size=1000`);
+    return normalizeLabels(Array.isArray(data) ? data : data.results);
+  } catch {
+    return [];
+  }
 }
 
 function toAttributes(
@@ -255,26 +266,30 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations, fram
 }
 
 export async function loadCvatTaskDataset(connection: CvatConnection, taskId: number): Promise<CVATDataset> {
-  const [task, annotations] = await Promise.all([
+  const [task, annotations, labels] = await Promise.all([
     cvatFetch<CvatTask>(connection, `/tasks/${taskId}`),
     cvatFetch<CvatAnnotations>(connection, `/tasks/${taskId}/annotations`),
+    listCvatTaskLabels(connection, taskId),
   ]);
-  return toCvatDataset(task, annotations);
+  return toCvatDataset({ ...task, labels: labels.length > 0 ? labels : task.labels }, annotations);
 }
 
 export async function loadCvatJobDataset(connection: CvatConnection, taskId: number, jobId: number): Promise<CVATDataset> {
-  const [task, job, annotations] = await Promise.all([
+  const [task, job, annotations, labels] = await Promise.all([
     cvatFetch<CvatTask>(connection, `/tasks/${taskId}`),
     cvatFetch<CvatJob>(connection, `/jobs/${jobId}`),
     cvatFetch<CvatAnnotations>(connection, `/jobs/${jobId}/annotations`),
+    listCvatTaskLabels(connection, taskId),
   ]);
-  return toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}` }, annotations, job);
+  return toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}`, labels: labels.length > 0 ? labels : task.labels }, annotations, job);
 }
 
 function proxyUrl(path: string): string {
-  if (path === '/tasks?limit=100') return '/api/cvat?resource=tasks';
-  const jobsMatch = path.match(/^\/jobs\?task_id=(\d+)&limit=100$/);
+  if (path === '/tasks?page_size=1000') return '/api/cvat?resource=tasks';
+  const jobsMatch = path.match(/^\/jobs\?task_id=(\d+)&page_size=1000$/);
   if (jobsMatch) return `/api/cvat?resource=jobs&taskId=${jobsMatch[1]}`;
+  const labelsMatch = path.match(/^\/labels\?task_id=(\d+)&page_size=1000$/);
+  if (labelsMatch) return `/api/cvat?resource=labels&taskId=${labelsMatch[1]}`;
   const jobMatch = path.match(/^\/jobs\/(\d+)(\/annotations)?$/);
   if (jobMatch) return `/api/cvat?resource=${jobMatch[2] ? 'jobAnnotations' : 'job'}&jobId=${jobMatch[1]}`;
   const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);

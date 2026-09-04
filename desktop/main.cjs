@@ -14,8 +14,9 @@ function cvatApiBaseUrl(serverUrl) {
 
 function cvatPath({ resource, taskId, jobId, frameId }) {
   const id = Number(taskId);
-  if (resource === 'tasks') return '/tasks?limit=100';
-  if (resource === 'jobs' && Number.isInteger(id) && id > 0) return `/jobs?task_id=${id}&limit=100`;
+  if (resource === 'tasks') return '/tasks?page_size=1000';
+  if (resource === 'jobs' && Number.isInteger(id) && id > 0) return `/jobs?task_id=${id}&page_size=1000`;
+  if (resource === 'labels' && Number.isInteger(id) && id > 0) return `/labels?task_id=${id}&page_size=1000`;
   const job = Number(jobId);
   if (resource === 'job' && Number.isInteger(job) && job > 0) return `/jobs/${job}`;
   if (resource === 'jobAnnotations' && Number.isInteger(job) && job > 0) return `/jobs/${job}/annotations`;
