@@ -7,6 +7,14 @@ const APP_ID = 'com.ndcli.cvatboxcounter';
 const APP_TITLE = 'CVAT Box Counter & Duplicate Inspector';
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 
+function defaultToken() {
+  try {
+    return require('./generated/default-token.cjs');
+  } catch {
+    return '';
+  }
+}
+
 function storedTokenPath() {
   return path.join(app.getPath('userData'), 'cvat-pat.bin');
 }
@@ -39,6 +47,8 @@ ipcMain.handle('cvat:token:set', async (_event, value) => {
   await fs.writeFile(storedTokenPath(), encryptToken(token));
 });
 
+ipcMain.handle('cvat:token:has-default', () => Boolean(defaultToken()));
+
 function cvatApiBaseUrl(serverUrl) {
   const parsedUrl = new URL(serverUrl);
   if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('URL CVAT không hợp lệ.');
@@ -65,7 +75,8 @@ function cvatPath({ resource, taskId, jobId, frameId }) {
 }
 
 ipcMain.handle('cvat:request', async (_event, request) => {
-  const token = typeof request?.token === 'string' ? request.token.trim() : '';
+  const suppliedToken = typeof request?.token === 'string' ? request.token.trim() : '';
+  const token = suppliedToken || defaultToken();
   if (!request || typeof request.serverUrl !== 'string' || token.length === 0) {
     throw new Error('Thiếu URL CVAT hoặc token.');
   }

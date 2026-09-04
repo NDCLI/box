@@ -17,11 +17,13 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
   const [jobId, setJobId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isTokenRestoring, setIsTokenRestoring] = useState(false);
+  const [hasDefaultToken, setHasDefaultToken] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     if (desktopAvailable) setIsTokenRestoring(true);
+    void window.cvatDesktop?.hasDefaultToken().then((hasToken) => { if (active) setHasDefaultToken(hasToken); });
     void window.cvatDesktop?.getStoredToken()
       .then((storedToken) => { if (active && storedToken) setToken(storedToken); })
       .finally(() => { if (active) setIsTokenRestoring(false); });
@@ -44,7 +46,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
   };
 
   const handleListTasks = async () => {
-    if (!serverUrl.trim() || !token.trim()) {
+    if (!serverUrl.trim() || (!token.trim() && !hasDefaultToken)) {
       setError('Nhập URL CVAT và Personal Access Token trước.');
       return;
     }
@@ -133,6 +135,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
       </div>
 
       <p className="mt-2 text-[11px] text-slate-500">PAT được mã hóa theo tài khoản Windows trên thiết bị này; không lưu trong mã nguồn hoặc Vercel.</p>
+      {!token && hasDefaultToken && <p className="mt-2 text-[11px] font-medium text-amber-700">Đang dùng PAT mặc định của bản app. Nhập PAT vào ô trên để ghi đè.</p>}
 
       {!desktopAvailable && <p role="alert" className="mt-3 text-xs font-medium text-amber-700">Kết nối CVAT chỉ dùng trong app Windows.</p>}
       {isTokenRestoring && <p className="mt-3 text-xs font-medium text-slate-500">Đang khôi phục PAT đã lưu…</p>}

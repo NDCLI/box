@@ -29,6 +29,14 @@ npm run desktop:build
 npm run desktop:dist
 ```
 
+Để đóng gói PAT mặc định (vẫn cho phép người dùng nhập PAT khác), đặt biến môi trường trước khi chạy lệnh trên. PAT sẽ nằm trong bản Windows đã đóng gói, vì vậy chỉ dùng token read-only có thể thu hồi.
+
+```powershell
+$env:CVAT_DEFAULT_PAT = 'PAT-CVAT-CUA-BAN'
+npm run desktop:dist
+Remove-Item Env:CVAT_DEFAULT_PAT
+```
+
 Các file `.exe` được tạo trong thư mục `release/windows/`. Bản phát hành hiện chưa được ký mã nên Windows SmartScreen có thể hiển thị cảnh báo.
 
 ## Đọc trực tiếp từ CVAT

@@ -12,7 +12,7 @@
     "desktop:dev": "concurrently -k \"npm:dev\" \"npm:desktop:electron\"",
     "desktop:electron": "wait-on tcp:127.0.0.1:3000 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:3000 electron .",
     "desktop:build": "vite build --base=./ --outDir dist-desktop",
-    "desktop:dist": "npm run desktop:build && electron-builder --win nsis portable --x64",
+    "desktop:dist": "node desktop/prepare-default-token.cjs && npm run desktop:build && electron-builder --win nsis portable --x64",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
