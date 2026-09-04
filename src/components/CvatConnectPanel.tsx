@@ -16,26 +16,23 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
   const [jobs, setJobs] = useState<CvatJobSummary[]>([]);
   const [jobId, setJobId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isTokenRestoring, setIsTokenRestoring] = useState(desktopAvailable);
+  const [isTokenRestoring, setIsTokenRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    if (desktopAvailable) setIsTokenRestoring(true);
     void window.cvatDesktop?.getStoredToken()
       .then((storedToken) => { if (active && storedToken) setToken(storedToken); })
       .finally(() => { if (active) setIsTokenRestoring(false); });
     return () => { active = false; };
   }, [desktopAvailable]);
 
-  useEffect(() => {
-    if (!desktopAvailable || isTokenRestoring) return;
-    const timer = window.setTimeout(() => {
-      void window.cvatDesktop?.saveToken(token).catch((err) => {
-        setError(err instanceof Error ? err.message : 'Không thể lưu PAT đã mã hóa.');
-      });
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [desktopAvailable, isTokenRestoring, token]);
+  const saveCurrentToken = () => {
+    void window.cvatDesktop?.saveToken(token).catch((err) => {
+      setError(err instanceof Error ? err.message : 'Không thể lưu PAT đã mã hóa.');
+    });
+  };
 
   const connection = (): CvatConnection => ({ mode: 'electron', serverUrl, token });
 
@@ -129,8 +126,9 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
         </label>
         <label className="text-xs font-semibold text-slate-600">
           Personal Access Token (Read Only)
-          <input value={token} onChange={(event) => setToken(event.target.value)} placeholder="Dán token CVAT" type="password" disabled={isTokenRestoring} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" autoComplete="off" />
+          <input value={token} onChange={(event) => setToken(event.target.value)} onBlur={saveCurrentToken} placeholder="Dán token CVAT" type="password" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" autoComplete="off" />
           <button type="button" onClick={() => { setToken(''); void window.cvatDesktop?.saveToken(''); }} className="mt-1.5 text-[11px] font-semibold text-slate-500 hover:text-red-600">Xóa PAT đã lưu</button>
+          {token && <span className="ml-3 text-[11px] font-medium text-slate-500">Đã nhập: {token.length} ký tự</span>}
         </label>
       </div>
 
@@ -140,18 +138,18 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
       {isTokenRestoring && <p className="mt-3 text-xs font-medium text-slate-500">Đang khôi phục PAT đã lưu…</p>}
 
       <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-        <button type="button" onClick={handleListTasks} disabled={isLoading || isTokenRestoring || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-60">
+        <button type="button" onClick={handleListTasks} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-60">
           {isLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
           Lấy danh sách Task
         </button>
         <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-slate-600">
           Task
           {tasks.length > 0 ? (
-            <select value={taskId} onChange={(event) => void handleTaskChange(event.target.value)} disabled={isLoading || isTokenRestoring || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60">
+            <select value={taskId} onChange={(event) => void handleTaskChange(event.target.value)} disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60">
               {tasks.map(task => <option key={task.id} value={task.id}>#{task.id} — {task.name}</option>)}
             </select>
           ) : (
-            <input value={taskId} onChange={(event) => setTaskId(event.target.value)} placeholder="Nhập Task ID" inputMode="numeric" disabled={isLoading || isTokenRestoring || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
+            <input value={taskId} onChange={(event) => setTaskId(event.target.value)} placeholder="Nhập Task ID" inputMode="numeric" disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
           )}
         </label>
       </div>
@@ -160,14 +158,14 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
         <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-slate-600">
           Job
           {jobs.length > 0 ? (
-            <select value={jobId} onChange={(event) => setJobId(event.target.value)} disabled={isLoading || isTokenRestoring || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60">
+            <select value={jobId} onChange={(event) => setJobId(event.target.value)} disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60">
               {jobs.map(job => <option key={job.id} value={job.id}>#{job.id} — Frame {job.start_frame ?? '?'}–{job.stop_frame ?? '?'}</option>)}
             </select>
           ) : (
-            <input value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="Lấy danh sách hoặc nhập Job ID" inputMode="numeric" disabled={isLoading || isTokenRestoring || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
+            <input value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="Lấy danh sách hoặc nhập Job ID" inputMode="numeric" disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
           )}
         </label>
-        <button type="button" onClick={handleLoadJob} disabled={isLoading || isTokenRestoring || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
+        <button type="button" onClick={handleLoadJob} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
           <KeyRound className="h-4 w-4" /> Tải annotation Job
         </button>
       </div>
