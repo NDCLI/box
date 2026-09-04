@@ -244,6 +244,7 @@ export function detectDuplicates(
 
   dataset.frames.forEach(frame => {
     const { boxes } = frame;
+    if (boxes.some(box => box.label.toLowerCase().includes('skip'))) return;
     if (boxes.length < 2) return;
 
     // Track which boxes have already been flagged as duplicates

@@ -294,6 +294,30 @@ describe('detectDuplicates', () => {
     expect(groups[0].boxes).toHaveLength(2);
   });
 
+  it('skips duplicate detection for frames containing a skip label', () => {
+    const ds = makeDataset([
+      {
+        id: '0',
+        boxes: [
+          { id: '1', label: '_frame_skip', xtl: 0, ytl: 0, xbr: 10, ybr: 10 },
+          { id: '2', label: 'car', xtl: 10, ytl: 10, xbr: 100, ybr: 100 },
+          { id: '3', label: 'car', xtl: 10, ytl: 10, xbr: 100, ybr: 100 },
+        ],
+      },
+      {
+        id: '1',
+        boxes: [
+          { id: '4', label: 'car', xtl: 10, ytl: 10, xbr: 100, ybr: 100 },
+          { id: '5', label: 'car', xtl: 10, ytl: 10, xbr: 100, ybr: 100 },
+        ],
+      },
+    ]);
+
+    const groups = detectDuplicates(ds, defaultSettings);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].frameId).toBe('1');
+  });
+
   it('does not flag distinct boxes as duplicates', () => {
     const ds = makeDataset([
       {
