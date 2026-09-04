@@ -8,6 +8,7 @@ interface CvatConnectPanelProps {
 }
 
 export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelProps) {
+  const [connectionMode, setConnectionMode] = useState<'vercel' | 'direct'>('vercel');
   const [serverUrl, setServerUrl] = useState('');
   const [token, setToken] = useState('');
   const [tasks, setTasks] = useState<CvatTaskSummary[]>([]);
@@ -15,10 +16,12 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const connection = (): CvatConnection => ({ serverUrl, token });
+  const connection = (): CvatConnection => connectionMode === 'vercel'
+    ? { mode: 'vercel' }
+    : { mode: 'direct', serverUrl, token };
 
   const handleListTasks = async () => {
-    if (!serverUrl.trim() || !token.trim()) {
+    if (connectionMode === 'direct' && (!serverUrl.trim() || !token.trim())) {
       setError('Nhập URL CVAT và Personal Access Token trước.');
       return;
     }
@@ -31,7 +34,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
       setTaskId(loadedTasks[0] ? String(loadedTasks[0].id) : '');
       if (loadedTasks.length === 0) setError('Không tìm thấy Task nào mà token có quyền đọc.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể kết nối tới CVAT. Kiểm tra URL, token và CORS.');
+      setError(err instanceof Error ? err.message : 'Không thể kết nối tới CVAT. Kiểm tra cấu hình Vercel hoặc CORS.');
     } finally {
       setIsLoading(false);
     }
@@ -49,7 +52,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     try {
       const activeConnection = connection();
       onDatasetLoaded(await loadCvatTaskDataset(activeConnection, id), activeConnection, id);
-      setToken('');
+      if (connectionMode === 'direct') setToken('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải annotation từ CVAT.');
     } finally {
@@ -63,11 +66,19 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
         <span className="rounded-xl bg-blue-50 p-2.5 text-blue-600"><CloudDownload className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold text-slate-900">Đọc trực tiếp từ CVAT</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Token chỉ dùng trong phiên này để đọc Task, không được lưu trên thiết bị.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Dùng token Vercel hoặc PAT của phiên này để chỉ đọc Task.</p>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 flex gap-2 rounded-lg bg-slate-100 p-1">
+        <button type="button" onClick={() => setConnectionMode('vercel')} className={`flex-1 rounded-md px-3 py-2 text-xs font-bold ${connectionMode === 'vercel' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>Dùng token Vercel</button>
+        <button type="button" onClick={() => setConnectionMode('direct')} className={`flex-1 rounded-md px-3 py-2 text-xs font-bold ${connectionMode === 'direct' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>Dán PAT tạm thời</button>
+      </div>
+
+      {connectionMode === 'vercel' ? (
+        <p className="mt-3 text-xs text-slate-500">Token được giữ kín trong Vercel; ứng dụng chỉ gọi API nội bộ.</p>
+      ) : (
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="text-xs font-semibold text-slate-600">
           URL CVAT
           <input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} placeholder="https://cvat.example.com" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" autoComplete="url" />
@@ -77,6 +88,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
           <input value={token} onChange={(event) => setToken(event.target.value)} placeholder="Dán token CVAT" type="password" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" autoComplete="off" />
         </label>
       </div>
+      )}
 
       <div className="mt-3 flex flex-col gap-3 sm:flex-row">
         <button type="button" onClick={handleListTasks} disabled={isLoading} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-60">

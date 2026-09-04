@@ -1,9 +1,16 @@
 import type { CVATAttribute, CVATBox, CVATDataset, CVATFrameData } from '../types';
 
-export interface CvatConnection {
+export interface DirectCvatConnection {
+  mode: 'direct';
   serverUrl: string;
   token: string;
 }
+
+export interface VercelCvatConnection {
+  mode: 'vercel';
+}
+
+export type CvatConnection = DirectCvatConnection | VercelCvatConnection;
 
 export interface CvatTaskSummary {
   id: number;
@@ -63,10 +70,10 @@ function apiBaseUrl(serverUrl: string): string {
 }
 
 async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl(connection.serverUrl)}${path}`, {
+  const response = await fetch(connection.mode === 'vercel' ? proxyUrl(path) : `${apiBaseUrl(connection.serverUrl)}${path}`, {
     headers: {
-      Authorization: `Token ${connection.token.trim()}`,
       Accept: 'application/vnd.cvat+json, application/json',
+      ...(connection.mode === 'direct' ? { Authorization: `Token ${connection.token.trim()}` } : {}),
     },
   });
 
@@ -163,13 +170,23 @@ export async function loadCvatTaskDataset(connection: CvatConnection, taskId: nu
   return toCvatDataset(task, annotations);
 }
 
+function proxyUrl(path: string): string {
+  if (path === '/tasks?limit=100') return '/api/cvat?resource=tasks';
+  const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
+  if (!match) throw new Error('Yêu cầu CVAT không được hỗ trợ.');
+  const resource = match[2] ? 'annotations' : 'task';
+  return `/api/cvat?resource=${resource}&taskId=${match[1]}`;
+}
+
 export async function loadCvatFrameImage(connection: CvatConnection, taskId: number, frameId: string): Promise<Blob> {
   const response = await fetch(
-    `${apiBaseUrl(connection.serverUrl)}/tasks/${taskId}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`,
+    connection.mode === 'vercel'
+      ? `/api/cvat?resource=frame&taskId=${taskId}&frameId=${encodeURIComponent(frameId)}`
+      : `${apiBaseUrl(connection.serverUrl)}/tasks/${taskId}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`,
     {
       headers: {
-        Authorization: `Token ${connection.token.trim()}`,
         Accept: 'image/*',
+        ...(connection.mode === 'direct' ? { Authorization: `Token ${connection.token.trim()}` } : {}),
       },
     },
   );
