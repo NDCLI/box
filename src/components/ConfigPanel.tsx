@@ -118,13 +118,13 @@ export default function ConfigPanel({
                 }`}
             >
               <span className="block text-xs font-bold">
-                {skipFrameFilterEnabled ? 'Đếm tất cả box trong Frame Skip' : 'Chỉ tính box _skip'}
+                {skipFrameFilterEnabled ? 'Bỏ qua box trong Frame Skip' : 'Đếm tất cả box'}
               </span>
               <button
                 type="button"
                 role="switch"
                 aria-checked={skipFrameFilterEnabled}
-                aria-label={skipFrameFilterEnabled ? 'Đếm tất cả box trong Frame Skip' : 'Chỉ tính box _skip'}
+                aria-label={skipFrameFilterEnabled ? 'Bỏ qua box trong Frame Skip' : 'Đếm tất cả box'}
                 onClick={() => onSkipFrameFilterEnabledChange(!skipFrameFilterEnabled)}
                 className={`skip-frame-toggle relative h-6 w-11 rounded-full p-0.5 transition-colors ${skipFrameFilterEnabled ? 'is-enabled' : ''}`}
               >
