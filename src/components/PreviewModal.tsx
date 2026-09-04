@@ -17,6 +17,7 @@ interface PreviewModalProps {
   duplicateGroups: DuplicateGroup[];
   currentImageSrc: string | null;
   imageLoading: boolean;
+  imageError: string | null;
   customZoomPadding: number;
   onCustomZoomPaddingChange: (value: number) => void;
   onClose: () => void;
@@ -29,6 +30,7 @@ export default function PreviewModal({
   duplicateGroups,
   currentImageSrc,
   imageLoading,
+  imageError,
   customZoomPadding,
   onCustomZoomPaddingChange,
   onClose
@@ -173,6 +175,12 @@ export default function PreviewModal({
                         <Loader2 className="w-8 h-8 text-red-500 animate-spin mb-2" />
                         <p className="text-xs text-slate-300 font-bold font-sans">Đang tải ảnh...</p>
                         <p className="text-[10px] text-slate-500 mt-0.5 font-mono truncate max-w-xs">Frame {selectedFrameData.id}</p>
+                      </div>
+                    )}
+
+                    {imageError && !imageLoading && (
+                      <div className="absolute bottom-3 left-1/2 z-20 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-md border border-red-500/40 bg-red-950/90 px-3 py-2 text-center text-xs font-semibold text-red-200 shadow-lg">
+                        {imageError}
                       </div>
                     )}
 

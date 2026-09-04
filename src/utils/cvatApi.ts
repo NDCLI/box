@@ -169,6 +169,9 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations): CVA
     if (shape.type !== 'rectangle' || shape.outside || shape.points.length < 4) return;
     const label = labelsById.get(shape.label_id)?.name ?? `label_${shape.label_id}`;
     const [xtl, ytl, xbr, ybr] = shape.points;
+    const frame = getFrame(shape.frame);
+    frame.width = Math.max(frame.width, Math.ceil(xbr));
+    frame.height = Math.max(frame.height, Math.ceil(ybr));
     const box: CVATBox = {
       id: String(shape.id ?? `${trackId ?? 'shape'}-${shape.frame}-${globalIndex}`),
       label,
@@ -184,10 +187,10 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations): CVA
       keyframe: shape.keyframe,
       trackId: trackId === undefined ? undefined : String(trackId),
       attributes: [...toAttributes(trackAttributes, attributeNames), ...toAttributes(shape.attributes, attributeNames)],
-      originalIndex: getFrame(shape.frame).boxes.length,
+      originalIndex: frame.boxes.length,
       globalIndex: globalIndex++,
     };
-    getFrame(shape.frame).boxes.push(box);
+    frame.boxes.push(box);
   };
 
   const shapes = Array.isArray(annotations.shapes) ? annotations.shapes : [];

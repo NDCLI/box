@@ -18,6 +18,7 @@ export interface UseFrameImageArgs {
 export interface UseFrameImageReturn {
   currentImageSrc: string | null;
   imageLoading: boolean;
+  imageError: string | null;
 }
 
 /**
@@ -54,6 +55,7 @@ export function useFrameImage({
 }: UseFrameImageArgs): UseFrameImageReturn {
   const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   // Effect to load frame image from ZIP or manual map when active frame changes
   useEffect(() => {
@@ -63,8 +65,11 @@ export function useFrameImage({
     const loadFrameImage = async () => {
       if (!selectedFrameData) {
         setCurrentImageSrc(null);
+        setImageError(null);
         return;
       }
+
+      setImageError(null);
 
       // 1. Check if we have a manual image uploaded for this frame
       if (manualImages[selectedFrameData.name]) {
@@ -84,7 +89,10 @@ export function useFrameImage({
           }
         } catch (err) {
           console.error('Lỗi khi tải ảnh Frame từ CVAT:', err);
-          if (active) setCurrentImageSrc(null);
+          if (active) {
+            setCurrentImageSrc(null);
+            setImageError(err instanceof Error ? err.message : 'Không thể tải ảnh từ CVAT.');
+          }
         } finally {
           if (active) setImageLoading(false);
         }
@@ -132,5 +140,5 @@ export function useFrameImage({
     };
   }, [selectedFrameData, zipEntries, manualImages, cvatFrameSource]);
 
-  return { currentImageSrc, imageLoading };
+  return { currentImageSrc, imageLoading, imageError };
 }

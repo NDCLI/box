@@ -241,6 +241,7 @@ export default function App() {
             duplicateGroups={detection.duplicateGroups}
             currentImageSrc={frameImage.currentImageSrc}
             imageLoading={frameImage.imageLoading}
+            imageError={frameImage.imageError}
             customZoomPadding={customZoomPadding}
             onCustomZoomPaddingChange={setCustomZoomPadding}
             onClose={() => detection.setSelectedGroupId(null)}
