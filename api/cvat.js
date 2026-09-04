@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     const frameId = readQueryValue(req.query.frameId);
     if (!/^\d+$/.test(frameId ?? '')) return res.status(400).json({ error: 'Frame ID không hợp lệ.' });
     upstreamPath = `/tasks/${taskId}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
-    accept = 'image/*';
+    accept = '*/*';
   } else {
     return res.status(400).json({ error: 'Yêu cầu CVAT không hợp lệ.' });
   }

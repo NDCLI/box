@@ -242,7 +242,7 @@ export async function loadCvatFrameImage(connection: CvatConnection, taskId: num
       : `${apiBaseUrl(connection.serverUrl)}/tasks/${taskId}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`,
     {
       headers: {
-        Accept: 'image/*',
+        Accept: '*/*',
         ...(connection.mode === 'direct' ? { Authorization: `Bearer ${connection.token.trim()}` } : {}),
       },
     },

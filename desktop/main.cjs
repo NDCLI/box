@@ -34,7 +34,7 @@ ipcMain.handle('cvat:request', async (_event, request) => {
   const response = await fetch(`${cvatApiBaseUrl(request.serverUrl)}${cvatPath(request)}`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      Accept: resource === 'frame' ? 'image/*' : 'application/vnd.cvat+json, application/json',
+      Accept: resource === 'frame' ? '*/*' : 'application/vnd.cvat+json, application/json',
     },
   });
 
