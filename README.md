@@ -29,7 +29,13 @@ npm run desktop:build
 npm run desktop:dist
 ```
 
-Các file `.exe` được tạo trong thư mục `release/`. Bản phát hành hiện chưa được ký mã nên Windows SmartScreen có thể hiển thị cảnh báo.
+Các file `.exe` được tạo trong thư mục `release/windows/`. Bản phát hành hiện chưa được ký mã nên Windows SmartScreen có thể hiển thị cảnh báo.
+
+## Đọc trực tiếp từ CVAT
+
+Ngoài XML/ZIP, màn hình mở file có thể kết nối trực tiếp tới CVAT bằng URL server, Personal Access Token (PAT) chỉ đọc và Task ID. Token chỉ giữ trong bộ nhớ của phiên đang mở, không được lưu vào source hay localStorage.
+
+Kết nối trực tiếp cần CVAT cho phép CORS từ địa chỉ chạy ứng dụng. Nếu CVAT chặn CORS, cấu hình CORS trên CVAT rồi thử lại.
 
 ## Kiểm tra mã nguồn
 

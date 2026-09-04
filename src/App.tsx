@@ -3,7 +3,7 @@ import { lazy, Suspense, useState, useCallback } from 'react';
 // Hooks
 import { useFileProcessor } from './hooks/useFileProcessor';
 import { useDuplicateDetection } from './hooks/useDuplicateDetection';
-import { useFrameImage } from './hooks/useFrameImage';
+import { useFrameImage, type CvatFrameSource } from './hooks/useFrameImage';
 
 // Components
 import Header from './components/Header';
@@ -39,6 +39,7 @@ export default function App() {
 
   // ── Manual images mapping ──
   const [manualImages, setManualImages] = useState<Record<string, string>>({});
+  const [cvatFrameSource, setCvatFrameSource] = useState<CvatFrameSource | null>(null);
 
   // ── Visualizer settings ──
   const [customZoomPadding, setCustomZoomPadding] = useState<number>(60);
@@ -64,11 +65,13 @@ export default function App() {
     selectedFrameData: detection.selectedFrameData,
     zipEntries: fp.zipEntries,
     manualImages,
+    cvatFrameSource,
   });
 
   // ── Extended reset (clean up manual images too) ──
   const handleReset = useCallback(() => {
     fp.resetState();
+    setCvatFrameSource(null);
     setManualImages((prev) => {
       Object.values(prev).forEach((url) => {
         if (url) URL.revokeObjectURL(url);
@@ -156,6 +159,10 @@ export default function App() {
             onDragOver={fp.handleDragOver}
             onDragLeave={fp.handleDragLeave}
             onDrop={fp.handleDrop}
+            onCvatDatasetLoaded={(dataset, connection, taskId) => {
+              setCvatFrameSource({ connection, taskId });
+              fp.loadDataset(dataset);
+            }}
           />
         )}
 
