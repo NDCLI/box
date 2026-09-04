@@ -10,7 +10,7 @@ interface CvatConnectPanelProps {
 export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelProps) {
   const desktopAvailable = Boolean(window.cvatDesktop);
   const [connectionMode, setConnectionMode] = useState<'vercel' | 'direct' | 'electron'>(desktopAvailable ? 'electron' : 'vercel');
-  const [serverUrl, setServerUrl] = useState('');
+  const [serverUrl, setServerUrl] = useState('http://10.43.2.147:8080');
   const [token, setToken] = useState('');
   const [tasks, setTasks] = useState<CvatTaskSummary[]>([]);
   const [taskId, setTaskId] = useState('');
