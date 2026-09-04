@@ -33,9 +33,9 @@ Các file `.exe` được tạo trong thư mục `release/windows/`. Bản phát
 
 ## Đọc trực tiếp từ CVAT
 
-Ngoài XML/ZIP, màn hình mở file có thể kết nối trực tiếp tới CVAT bằng URL server, Personal Access Token (PAT) chỉ đọc và Task ID. Token chỉ giữ trong bộ nhớ của phiên đang mở, không được lưu vào source hay localStorage.
+Ngoài XML/ZIP, màn hình mở file có thể kết nối trực tiếp tới CVAT bằng Task ID. Khi deploy trên Vercel, đặt `CVAT_BASE_URL` và `CVAT_PAT` trong Project Settings; hai biến này không dùng tiền tố `VITE_`, chỉ được Vercel Function đọc và không đi xuống trình duyệt. Proxy chỉ cho phép đọc Task, annotation và ảnh Frame.
 
-Kết nối trực tiếp cần CVAT cho phép CORS từ địa chỉ chạy ứng dụng. Nếu CVAT chặn CORS, cấu hình CORS trên CVAT rồi thử lại.
+Chế độ `Dán PAT tạm thời` vẫn dành cho chạy local/Desktop; token chỉ giữ trong bộ nhớ phiên. Kết nối trực tiếp cần CVAT cho phép CORS từ địa chỉ chạy ứng dụng.
 
 ## Kiểm tra mã nguồn
 
