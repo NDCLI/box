@@ -162,3 +162,18 @@ export async function loadCvatTaskDataset(connection: CvatConnection, taskId: nu
   ]);
   return toCvatDataset(task, annotations);
 }
+
+export async function loadCvatFrameImage(connection: CvatConnection, taskId: number, frameId: string): Promise<Blob> {
+  const response = await fetch(
+    `${apiBaseUrl(connection.serverUrl)}/tasks/${taskId}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`,
+    {
+      headers: {
+        Authorization: `Token ${connection.token.trim()}`,
+        Accept: 'image/*',
+      },
+    },
+  );
+
+  if (!response.ok) throw new Error(`Không thể tải ảnh Frame ${frameId} từ CVAT (${response.status}).`);
+  return response.blob();
+}

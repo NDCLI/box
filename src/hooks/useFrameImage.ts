@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
 import { BlobWriter, Entry } from '@zip.js/zip.js';
 import type { CVATFrameData } from '../types';
+import { loadCvatFrameImage, type CvatConnection } from '../utils/cvatApi';
+
+export interface CvatFrameSource {
+  connection: CvatConnection;
+  taskId: number;
+}
 
 export interface UseFrameImageArgs {
   selectedFrameData: CVATFrameData | null;
   zipEntries: Entry[] | null;
   manualImages: Record<string, string>;
+  cvatFrameSource: CvatFrameSource | null;
 }
 
 export interface UseFrameImageReturn {
@@ -43,6 +50,7 @@ export function useFrameImage({
   selectedFrameData,
   zipEntries,
   manualImages,
+  cvatFrameSource,
 }: UseFrameImageArgs): UseFrameImageReturn {
   const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
@@ -65,7 +73,25 @@ export function useFrameImage({
         return;
       }
 
-      // 2. Otherwise try loading from ZIP
+      // 2. Otherwise try loading from CVAT
+      if (cvatFrameSource) {
+        setImageLoading(true);
+        try {
+          const blob = await loadCvatFrameImage(cvatFrameSource.connection, cvatFrameSource.taskId, selectedFrameData.id);
+          if (active) {
+            localUrl = URL.createObjectURL(blob);
+            setCurrentImageSrc(localUrl);
+          }
+        } catch (err) {
+          console.error('Lỗi khi tải ảnh Frame từ CVAT:', err);
+          if (active) setCurrentImageSrc(null);
+        } finally {
+          if (active) setImageLoading(false);
+        }
+        return;
+      }
+
+      // 3. Otherwise try loading from ZIP
       if (!zipEntries) {
         setCurrentImageSrc(null);
         return;
@@ -104,7 +130,7 @@ export function useFrameImage({
         URL.revokeObjectURL(localUrl);
       }
     };
-  }, [selectedFrameData, zipEntries, manualImages]);
+  }, [selectedFrameData, zipEntries, manualImages, cvatFrameSource]);
 
   return { currentImageSrc, imageLoading };
 }

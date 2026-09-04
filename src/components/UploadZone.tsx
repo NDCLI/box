@@ -10,6 +10,7 @@ import {
 import { motion } from 'motion/react';
 import type { CVATDataset } from '../types';
 import CvatConnectPanel from './CvatConnectPanel';
+import type { CvatConnection } from '../utils/cvatApi';
 
 interface UploadZoneProps {
   isDragging: boolean;
@@ -19,7 +20,7 @@ interface UploadZoneProps {
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
-  onCvatDatasetLoaded: (dataset: CVATDataset) => void;
+  onCvatDatasetLoaded: (dataset: CVATDataset, connection: CvatConnection, taskId: number) => void;
 }
 
 const benefits = [

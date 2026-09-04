@@ -4,7 +4,7 @@ import type { CVATDataset } from '../types';
 import { listCvatTasks, loadCvatTaskDataset, type CvatConnection, type CvatTaskSummary } from '../utils/cvatApi';
 
 interface CvatConnectPanelProps {
-  onDatasetLoaded: (dataset: CVATDataset) => void;
+  onDatasetLoaded: (dataset: CVATDataset, connection: CvatConnection, taskId: number) => void;
 }
 
 export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelProps) {
@@ -47,7 +47,8 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     setError(null);
     setIsLoading(true);
     try {
-      onDatasetLoaded(await loadCvatTaskDataset(connection(), id));
+      const activeConnection = connection();
+      onDatasetLoaded(await loadCvatTaskDataset(activeConnection, id), activeConnection, id);
       setToken('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải annotation từ CVAT.');

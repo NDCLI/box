@@ -159,7 +159,7 @@ export default function PreviewModal({
                     {currentImageSrc ? (
                       <span className="text-emerald-400 flex items-center gap-1 font-sans font-bold">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Đã tải ảnh thực tế từ ZIP
+                        Đã tải ảnh thực tế
                       </span>
                     ) : (
                       <span className="text-slate-500 font-sans">Chỉ có file XML (Vẽ mô phỏng)</span>
@@ -171,7 +171,7 @@ export default function PreviewModal({
                     {imageLoading && (
                       <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center z-20">
                         <Loader2 className="w-8 h-8 text-red-500 animate-spin mb-2" />
-                        <p className="text-xs text-slate-300 font-bold font-sans">Đang giải nén ảnh...</p>
+                        <p className="text-xs text-slate-300 font-bold font-sans">Đang tải ảnh...</p>
                         <p className="text-[10px] text-slate-500 mt-0.5 font-mono truncate max-w-xs">Frame {selectedFrameData.id}</p>
                       </div>
                     )}
