@@ -199,10 +199,14 @@ export function useDuplicateDetection({
         excludeCount += f.boxes.length; // whole frame skipped
         finalExcludeCount += f.boxes.length;
         frameHasSkip = true;
-      } else if (skipFrameFilterEnabled && frameSkipLabelCount > 0) {
-        excludeCount += 1 + frameExtraExclude;
-        finalExcludeCount += f.boxes.length - frameSkipLabelCount;
+      } else if (frameSkipLabelCount > 0) {
         frameHasSkip = true;
+        if (skipFrameFilterEnabled) {
+          finalExcludeCount += f.boxes.length;
+        } else {
+          excludeCount += 1 + frameExtraExclude;
+          finalExcludeCount += 1 + frameExtraExclude;
+        }
       } else {
         excludeCount += frameExtraExclude;
         finalExcludeCount += frameExtraExclude;
