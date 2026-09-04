@@ -11,10 +11,28 @@ function storedTokenPath() {
   return path.join(app.getPath('userData'), 'cvat-pat.bin');
 }
 
+async function encryptToken(token) {
+  if (typeof safeStorage.encryptStringAsync !== 'function') return safeStorage.encryptString(token);
+  try {
+    return await safeStorage.encryptStringAsync(token);
+  } catch {
+    return safeStorage.encryptString(token);
+  }
+}
+
+async function decryptToken(value) {
+  if (typeof safeStorage.decryptStringAsync !== 'function') return safeStorage.decryptString(value);
+  try {
+    return await safeStorage.decryptStringAsync(value);
+  } catch {
+    return safeStorage.decryptString(value);
+  }
+}
+
 ipcMain.handle('cvat:token:get', async () => {
   if (!safeStorage.isEncryptionAvailable()) return null;
   try {
-    return await safeStorage.decryptStringAsync(await fs.readFile(storedTokenPath()));
+    return await decryptToken(await fs.readFile(storedTokenPath()));
   } catch {
     return null;
   }
@@ -27,7 +45,8 @@ ipcMain.handle('cvat:token:set', async (_event, value) => {
     await fs.rm(storedTokenPath(), { force: true });
     return;
   }
-  await fs.writeFile(storedTokenPath(), await safeStorage.encryptStringAsync(token));
+  await fs.mkdir(path.dirname(storedTokenPath()), { recursive: true });
+  await fs.writeFile(storedTokenPath(), await encryptToken(token));
 });
 
 function cvatApiBaseUrl(serverUrl) {
