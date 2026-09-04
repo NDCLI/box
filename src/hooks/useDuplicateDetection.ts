@@ -200,6 +200,7 @@ export function useDuplicateDetection({
       } else if (frameSkipLabelCount > 0) {
         frameHasSkip = true;
         if (skipFrameFilterEnabled) {
+          excludeCount += f.boxes.length;
           finalExcludeCount += f.boxes.length;
         } else {
           excludeCount += 1 + frameExtraExclude;
