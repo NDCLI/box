@@ -5,6 +5,7 @@ import type { CVATDataset, CVATFrameData, DetectionSettings, DuplicateGroup } fr
 export interface UseDuplicateDetectionArgs {
   dataset: CVATDataset | null;
   excludeLabels: string[];
+  skipFrameFilterEnabled: boolean;
 }
 
 export interface DuplicateStats {
@@ -62,6 +63,7 @@ export interface UseDuplicateDetectionReturn {
 export function useDuplicateDetection({
   dataset,
   excludeLabels,
+  skipFrameFilterEnabled,
 }: UseDuplicateDetectionArgs): UseDuplicateDetectionReturn {
   // Settings state
   const [settings, setSettings] = useState<DetectionSettings>({
@@ -197,7 +199,7 @@ export function useDuplicateDetection({
         excludeCount += f.boxes.length; // whole frame skipped
         finalExcludeCount += f.boxes.length;
         frameHasSkip = true;
-      } else if (frameSkipLabelCount > 0) {
+      } else if (skipFrameFilterEnabled && frameSkipLabelCount > 0) {
         excludeCount += 1 + frameExtraExclude;
         finalExcludeCount += f.boxes.length - frameSkipLabelCount;
         frameHasSkip = true;
@@ -245,7 +247,7 @@ export function useDuplicateDetection({
       totalValidBoxes: Math.max(0, totalBoxes - totalDuplicates),
       frameRange: { min: minDatasetFrame, max: maxDatasetFrame },
     };
-  }, [dataset, duplicateGroups, frameRangeStart, frameRangeEnd, excludeLabels]);
+  }, [dataset, duplicateGroups, frameRangeStart, frameRangeEnd, excludeLabels, skipFrameFilterEnabled]);
 
   // Filter duplicate groups based on search term and frame range
   const baseFilteredGroups = useMemo(() => {
