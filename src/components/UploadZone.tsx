@@ -55,6 +55,8 @@ export default function UploadZone({
       </div>
 
       <div className="app-upload-stage">
+        <CvatConnectPanel onDatasetLoaded={onCvatDatasetLoaded} />
+
         <input
           type="file"
           ref={fileInputRef}
@@ -89,7 +91,6 @@ export default function UploadZone({
           <ShieldCheck aria-hidden="true" /> File được phân tích ngay trên trình duyệt, không rời khỏi thiết bị.
         </p>
 
-        <CvatConnectPanel onDatasetLoaded={onCvatDatasetLoaded} />
       </div>
 
       <div className="app-benefits" aria-label="Tính năng chính">

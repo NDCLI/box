@@ -31,7 +31,7 @@ describe('UploadZone empty state', () => {
     const { container, root } = renderUploadZone();
 
     expect(container.textContent).toContain('CVAT Box Audit');
-    expect(container.querySelector('button')?.textContent).toContain('Chọn file XML hoặc ZIP');
+    expect(container.querySelector('#upload-dropzone')?.textContent).toContain('Chọn file XML hoặc ZIP');
 
     act(() => root.unmount());
     container.remove();
