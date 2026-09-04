@@ -1,0 +1,27 @@
+appId: com.ndcli.cvatboxcounter
+productName: CVAT Box Counter & Duplicate Inspector
+asar: true
+directories:
+  output: release/windows
+files:
+  - dist-desktop/**/*
+  - desktop/main.cjs
+  - desktop/assets/**/*
+win:
+  icon: desktop/assets/app-icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  artifactName: CVAT-Box-Counter-Setup-${version}-win-${arch}.${ext}
+portable:
+  artifactName: CVAT-Box-Counter-${version}-portable-win-${arch}.${ext}
