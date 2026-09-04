@@ -159,8 +159,8 @@ export default function App() {
             onDragOver={fp.handleDragOver}
             onDragLeave={fp.handleDragLeave}
             onDrop={fp.handleDrop}
-            onCvatDatasetLoaded={(dataset, connection, taskId) => {
-              setCvatFrameSource({ connection, taskId });
+            onCvatDatasetLoaded={(dataset, connection, taskId, jobId) => {
+              setCvatFrameSource({ connection, taskId, jobId });
               fp.loadDataset(dataset);
             }}
           />

@@ -6,6 +6,7 @@ import { loadCvatFrameImage, type CvatConnection } from '../utils/cvatApi';
 export interface CvatFrameSource {
   connection: CvatConnection;
   taskId: number;
+  jobId?: number;
 }
 
 export interface UseFrameImageArgs {
@@ -97,7 +98,7 @@ export function useFrameImage({
       if (cvatFrameSource) {
         setImageLoading(true);
         try {
-          const blob = await loadCvatFrameImage(cvatFrameSource.connection, cvatFrameSource.taskId, selectedFrameData.id);
+          const blob = await loadCvatFrameImage(cvatFrameSource.connection, cvatFrameSource.taskId, selectedFrameData.id, cvatFrameSource.jobId);
           if (active) {
             localUrl = URL.createObjectURL(blob);
             setImageDimensions(await getImageDimensions(blob));

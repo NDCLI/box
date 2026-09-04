@@ -12,9 +12,14 @@ function cvatApiBaseUrl(serverUrl) {
   return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 }
 
-function cvatPath({ resource, taskId, frameId }) {
+function cvatPath({ resource, taskId, jobId, frameId }) {
   const id = Number(taskId);
   if (resource === 'tasks') return '/tasks?limit=100';
+  if (resource === 'jobs' && Number.isInteger(id) && id > 0) return `/jobs?task_id=${id}&limit=100`;
+  const job = Number(jobId);
+  if (resource === 'job' && Number.isInteger(job) && job > 0) return `/jobs/${job}`;
+  if (resource === 'jobAnnotations' && Number.isInteger(job) && job > 0) return `/jobs/${job}/annotations`;
+  if (resource === 'jobFrame' && Number.isInteger(job) && job > 0 && /^\d+$/.test(String(frameId))) return `/jobs/${job}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
   if (!Number.isInteger(id) || id < 1) throw new Error('Task ID không hợp lệ.');
   if (resource === 'task') return `/tasks/${id}`;
   if (resource === 'annotations') return `/tasks/${id}/annotations`;
@@ -34,11 +39,11 @@ ipcMain.handle('cvat:request', async (_event, request) => {
   const response = await fetch(`${cvatApiBaseUrl(request.serverUrl)}${cvatPath(request)}`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      Accept: resource === 'frame' ? '*/*' : 'application/vnd.cvat+json, application/json',
+      Accept: resource === 'frame' || resource === 'jobFrame' ? '*/*' : 'application/vnd.cvat+json, application/json',
     },
   });
 
-  if (resource === 'frame') {
+  if (resource === 'frame' || resource === 'jobFrame') {
     return {
       status: response.status,
       contentType: response.headers.get('content-type') || 'application/octet-stream',

@@ -20,7 +20,7 @@ interface UploadZoneProps {
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
-  onCvatDatasetLoaded: (dataset: CVATDataset, connection: CvatConnection, taskId: number) => void;
+  onCvatDatasetLoaded: (dataset: CVATDataset, connection: CvatConnection, taskId: number, jobId?: number) => void;
 }
 
 const benefits = [

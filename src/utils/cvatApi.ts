@@ -16,7 +16,7 @@ export interface ElectronCvatConnection extends Omit<DirectCvatConnection, 'mode
 
 export type CvatConnection = DirectCvatConnection | VercelCvatConnection | ElectronCvatConnection;
 
-type CvatResource = 'tasks' | 'task' | 'annotations' | 'frame';
+type CvatResource = 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobAnnotations' | 'jobFrame';
 
 interface DesktopCvatResponse {
   status: number;
@@ -27,7 +27,7 @@ interface DesktopCvatResponse {
 declare global {
   interface Window {
     cvatDesktop?: {
-      request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; frameId?: string }) => Promise<DesktopCvatResponse>;
+      request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; jobId?: number; frameId?: string }) => Promise<DesktopCvatResponse>;
     };
   }
 }
@@ -35,6 +35,12 @@ declare global {
 export interface CvatTaskSummary {
   id: number;
   name: string;
+}
+
+export interface CvatJobSummary {
+  id: number;
+  start_frame?: number;
+  stop_frame?: number;
 }
 
 interface CvatAttributeSpec {
@@ -52,6 +58,10 @@ interface CvatLabel {
 interface CvatTask extends CvatTaskSummary {
   size?: number;
   labels?: CvatLabel[];
+}
+
+interface CvatJob extends CvatJobSummary {
+  task_id?: number;
 }
 
 interface CvatShape {
@@ -133,8 +143,12 @@ async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T
   return response.json() as Promise<T>;
 }
 
-function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame'>; taskId?: number } {
+function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame' | 'jobFrame'>; taskId?: number; jobId?: number } {
   if (path === '/tasks?limit=100') return { resource: 'tasks' };
+  const jobsMatch = path.match(/^\/jobs\?task_id=(\d+)&limit=100$/);
+  if (jobsMatch) return { resource: 'jobs', taskId: Number(jobsMatch[1]) };
+  const jobMatch = path.match(/^\/jobs\/(\d+)(\/annotations)?$/);
+  if (jobMatch) return { resource: jobMatch[2] ? 'jobAnnotations' : 'job', jobId: Number(jobMatch[1]) };
   const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
   if (!match) throw new Error('Yêu cầu CVAT không được hỗ trợ.');
   return { resource: match[2] ? 'annotations' : 'task', taskId: Number(match[1]) };
@@ -142,7 +156,7 @@ function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame
 
 async function requestDesktop(
   connection: ElectronCvatConnection,
-  request: { resource: CvatResource; taskId?: number; frameId?: string },
+  request: { resource: CvatResource; taskId?: number; jobId?: number; frameId?: string },
 ): Promise<DesktopCvatResponse> {
   if (!window.cvatDesktop) throw new Error('Hãy chạy tính năng này trong app Windows.');
   return window.cvatDesktop.request({ ...request, serverUrl: connection.serverUrl.trim(), token: connection.token.trim() });
@@ -150,6 +164,11 @@ async function requestDesktop(
 
 export async function listCvatTasks(connection: CvatConnection): Promise<CvatTaskSummary[]> {
   const data = await cvatFetch<CvatTaskSummary[] | { results?: CvatTaskSummary[] }>(connection, '/tasks?limit=100');
+  return Array.isArray(data) ? data : data.results ?? [];
+}
+
+export async function listCvatJobs(connection: CvatConnection, taskId: number): Promise<CvatJobSummary[]> {
+  const data = await cvatFetch<CvatJobSummary[] | { results?: CvatJobSummary[] }>(connection, `/jobs?task_id=${taskId}&limit=100`);
   return Array.isArray(data) ? data : data.results ?? [];
 }
 
@@ -163,7 +182,7 @@ function toAttributes(
   }));
 }
 
-export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations): CVATDataset {
+export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations, frameRange?: CvatJobSummary): CVATDataset {
   const labels = normalizeLabels(task.labels);
   const labelsById = new Map(labels.map(label => [label.id, label]));
   const attributeNames = new Map<number, string>();
@@ -217,7 +236,13 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations): CVA
     (Array.isArray(track.shapes) ? track.shapes : []).forEach(shape => addShape(shape, track.id, track.attributes));
   });
 
-  for (let frameId = 0; frameId < (task.size ?? 0); frameId++) getFrame(frameId);
+  if (Number.isInteger(frameRange?.start_frame) && Number.isInteger(frameRange?.stop_frame)) {
+    const startFrame = frameRange!.start_frame!;
+    const stopFrame = frameRange!.stop_frame!;
+    for (let frameId = startFrame; frameId <= stopFrame; frameId++) getFrame(frameId);
+  } else {
+    for (let frameId = 0; frameId < (task.size ?? 0); frameId++) getFrame(frameId);
+  }
 
   return {
     filename: `cvat-task-${task.id}.json`,
@@ -237,25 +262,38 @@ export async function loadCvatTaskDataset(connection: CvatConnection, taskId: nu
   return toCvatDataset(task, annotations);
 }
 
+export async function loadCvatJobDataset(connection: CvatConnection, taskId: number, jobId: number): Promise<CVATDataset> {
+  const [task, job, annotations] = await Promise.all([
+    cvatFetch<CvatTask>(connection, `/tasks/${taskId}`),
+    cvatFetch<CvatJob>(connection, `/jobs/${jobId}`),
+    cvatFetch<CvatAnnotations>(connection, `/jobs/${jobId}/annotations`),
+  ]);
+  return toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}` }, annotations, job);
+}
+
 function proxyUrl(path: string): string {
   if (path === '/tasks?limit=100') return '/api/cvat?resource=tasks';
+  const jobsMatch = path.match(/^\/jobs\?task_id=(\d+)&limit=100$/);
+  if (jobsMatch) return `/api/cvat?resource=jobs&taskId=${jobsMatch[1]}`;
+  const jobMatch = path.match(/^\/jobs\/(\d+)(\/annotations)?$/);
+  if (jobMatch) return `/api/cvat?resource=${jobMatch[2] ? 'jobAnnotations' : 'job'}&jobId=${jobMatch[1]}`;
   const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
   if (!match) throw new Error('Yêu cầu CVAT không được hỗ trợ.');
   const resource = match[2] ? 'annotations' : 'task';
   return `/api/cvat?resource=${resource}&taskId=${match[1]}`;
 }
 
-export async function loadCvatFrameImage(connection: CvatConnection, taskId: number, frameId: string): Promise<Blob> {
+export async function loadCvatFrameImage(connection: CvatConnection, taskId: number, frameId: string, jobId?: number): Promise<Blob> {
   if (connection.mode === 'electron') {
-    const response = await requestDesktop(connection, { resource: 'frame', taskId, frameId });
+    const response = await requestDesktop(connection, jobId ? { resource: 'jobFrame', jobId, frameId } : { resource: 'frame', taskId, frameId });
     if (response.status < 200 || response.status >= 300) throw new Error(`Không thể tải ảnh Frame ${frameId} từ CVAT (${response.status}).`);
     return new Blob([response.data as Uint8Array], { type: response.contentType });
   }
 
   const response = await fetch(
     connection.mode === 'vercel'
-      ? `/api/cvat?resource=frame&taskId=${taskId}&frameId=${encodeURIComponent(frameId)}`
-      : `${apiBaseUrl(connection.serverUrl)}/tasks/${taskId}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`,
+      ? `/api/cvat?resource=${jobId ? 'jobFrame' : 'frame'}&${jobId ? `jobId=${jobId}` : `taskId=${taskId}`}&frameId=${encodeURIComponent(frameId)}`
+      : `${apiBaseUrl(connection.serverUrl)}/${jobId ? `jobs/${jobId}` : `tasks/${taskId}`}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`,
     {
       headers: {
         Accept: '*/*',

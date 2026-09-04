@@ -7,6 +7,10 @@ function readTaskId(value) {
   return Number.isInteger(taskId) && taskId > 0 ? taskId : null;
 }
 
+function readJobId(value) {
+  return readTaskId(value);
+}
+
 function cvatApiBaseUrl() {
   const configuredUrl = process.env.CVAT_BASE_URL;
   if (!configuredUrl) return null;
@@ -27,6 +31,7 @@ export default async function handler(req, res) {
 
   const resource = readQueryValue(req.query.resource);
   const taskId = readTaskId(req.query.taskId);
+  const jobId = readJobId(req.query.jobId);
   let upstreamPath;
   let accept = 'application/vnd.cvat+json, application/json';
 
@@ -36,10 +41,21 @@ export default async function handler(req, res) {
     upstreamPath = `/tasks/${taskId}`;
   } else if (resource === 'annotations' && taskId) {
     upstreamPath = `/tasks/${taskId}/annotations`;
+  } else if (resource === 'jobs' && taskId) {
+    upstreamPath = `/jobs?task_id=${taskId}&limit=100`;
+  } else if (resource === 'job' && jobId) {
+    upstreamPath = `/jobs/${jobId}`;
+  } else if (resource === 'jobAnnotations' && jobId) {
+    upstreamPath = `/jobs/${jobId}/annotations`;
   } else if (resource === 'frame' && taskId) {
     const frameId = readQueryValue(req.query.frameId);
     if (!/^\d+$/.test(frameId ?? '')) return res.status(400).json({ error: 'Frame ID không hợp lệ.' });
     upstreamPath = `/tasks/${taskId}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
+    accept = '*/*';
+  } else if (resource === 'jobFrame' && jobId) {
+    const frameId = readQueryValue(req.query.frameId);
+    if (!/^\d+$/.test(frameId ?? '')) return res.status(400).json({ error: 'Frame ID không hợp lệ.' });
+    upstreamPath = `/jobs/${jobId}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
     accept = '*/*';
   } else {
     return res.status(400).json({ error: 'Yêu cầu CVAT không hợp lệ.' });
@@ -53,7 +69,7 @@ export default async function handler(req, res) {
       },
     });
 
-    if (resource === 'frame') {
+    if (resource === 'frame' || resource === 'jobFrame') {
       res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
       return res.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
     }
