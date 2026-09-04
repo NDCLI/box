@@ -103,7 +103,7 @@ async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T
   const response = await fetch(connection.mode === 'vercel' ? proxyUrl(path) : `${apiBaseUrl(connection.serverUrl)}${path}`, {
     headers: {
       Accept: 'application/vnd.cvat+json, application/json',
-      ...(connection.mode === 'direct' ? { Authorization: `Token ${connection.token.trim()}` } : {}),
+      ...(connection.mode === 'direct' ? { Authorization: `Bearer ${connection.token.trim()}` } : {}),
     },
   });
 
@@ -237,7 +237,7 @@ export async function loadCvatFrameImage(connection: CvatConnection, taskId: num
     {
       headers: {
         Accept: 'image/*',
-        ...(connection.mode === 'direct' ? { Authorization: `Token ${connection.token.trim()}` } : {}),
+        ...(connection.mode === 'direct' ? { Authorization: `Bearer ${connection.token.trim()}` } : {}),
       },
     },
   );

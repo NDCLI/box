@@ -48,7 +48,7 @@ export default async function handler(req, res) {
   try {
     const upstream = await fetch(`${apiBaseUrl}${upstreamPath}`, {
       headers: {
-        Authorization: `Token ${token}`,
+        Authorization: `Bearer ${token}`,
         Accept: accept,
       },
     });
