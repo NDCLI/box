@@ -199,12 +199,11 @@ export function useDuplicateDetection({
         frameHasSkip = true;
       } else if (frameSkipLabelCount > 0) {
         frameHasSkip = true;
+        finalExcludeCount += f.boxes.length;
         if (skipFrameFilterEnabled) {
           excludeCount += f.boxes.length;
-          finalExcludeCount += f.boxes.length;
         } else {
           excludeCount += 1 + frameExtraExclude;
-          finalExcludeCount += 1 + frameExtraExclude;
         }
       } else {
         excludeCount += frameExtraExclude;
