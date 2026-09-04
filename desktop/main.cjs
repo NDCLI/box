@@ -1,9 +1,52 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const path = require('node:path');
 
 const APP_ID = 'com.ndcli.cvatboxcounter';
 const APP_TITLE = 'CVAT Box Counter & Duplicate Inspector';
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+
+function cvatApiBaseUrl(serverUrl) {
+  const parsedUrl = new URL(serverUrl);
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('URL CVAT không hợp lệ.');
+  const normalized = parsedUrl.toString().replace(/\/+$/, '');
+  return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
+}
+
+function cvatPath({ resource, taskId, frameId }) {
+  const id = Number(taskId);
+  if (resource === 'tasks') return '/tasks?limit=100';
+  if (!Number.isInteger(id) || id < 1) throw new Error('Task ID không hợp lệ.');
+  if (resource === 'task') return `/tasks/${id}`;
+  if (resource === 'annotations') return `/tasks/${id}/annotations`;
+  if (resource === 'frame' && /^\d+$/.test(String(frameId))) {
+    return `/tasks/${id}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
+  }
+  throw new Error('Yêu cầu CVAT không hợp lệ.');
+}
+
+ipcMain.handle('cvat:request', async (_event, request) => {
+  if (!request || typeof request.serverUrl !== 'string' || typeof request.token !== 'string' || request.token.length === 0) {
+    throw new Error('Thiếu URL CVAT hoặc token.');
+  }
+
+  const resource = request.resource;
+  const response = await fetch(`${cvatApiBaseUrl(request.serverUrl)}${cvatPath(request)}`, {
+    headers: {
+      Authorization: `Token ${request.token}`,
+      Accept: resource === 'frame' ? 'image/*' : 'application/vnd.cvat+json, application/json',
+    },
+  });
+
+  if (resource === 'frame') {
+    return {
+      status: response.status,
+      contentType: response.headers.get('content-type') || 'application/octet-stream',
+      data: Buffer.from(await response.arrayBuffer()),
+    };
+  }
+
+  return { status: response.status, data: await response.json() };
+});
 
 function isExternalUrl(url) {
   return url.startsWith('http://') || url.startsWith('https://');
@@ -26,6 +69,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.cjs'),
       devTools: Boolean(rendererUrl),
     },
   });

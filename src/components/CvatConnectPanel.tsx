@@ -8,7 +8,8 @@ interface CvatConnectPanelProps {
 }
 
 export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelProps) {
-  const [connectionMode, setConnectionMode] = useState<'vercel' | 'direct'>('vercel');
+  const desktopAvailable = Boolean(window.cvatDesktop);
+  const [connectionMode, setConnectionMode] = useState<'vercel' | 'direct' | 'electron'>(desktopAvailable ? 'electron' : 'vercel');
   const [serverUrl, setServerUrl] = useState('');
   const [token, setToken] = useState('');
   const [tasks, setTasks] = useState<CvatTaskSummary[]>([]);
@@ -18,10 +19,10 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
 
   const connection = (): CvatConnection => connectionMode === 'vercel'
     ? { mode: 'vercel' }
-    : { mode: 'direct', serverUrl, token };
+    : { mode: connectionMode, serverUrl, token };
 
   const handleListTasks = async () => {
-    if (connectionMode === 'direct' && (!serverUrl.trim() || !token.trim())) {
+    if (connectionMode !== 'vercel' && (!serverUrl.trim() || !token.trim())) {
       setError('Nhập URL CVAT và Personal Access Token trước.');
       return;
     }
@@ -52,7 +53,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     try {
       const activeConnection = connection();
       onDatasetLoaded(await loadCvatTaskDataset(activeConnection, id), activeConnection, id);
-      if (connectionMode === 'direct') setToken('');
+      if (connectionMode !== 'vercel') setToken('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải annotation từ CVAT.');
     } finally {
@@ -66,12 +67,13 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
         <span className="rounded-xl bg-blue-50 p-2.5 text-blue-600"><CloudDownload className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold text-slate-900">Đọc trực tiếp từ CVAT</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Dùng token Vercel hoặc PAT của phiên này để chỉ đọc Task.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Dùng token Vercel hoặc PAT chỉ đọc để lấy Task.</p>
         </div>
       </div>
 
       <div className="mt-4 flex gap-2 rounded-lg bg-slate-100 p-1">
         <button type="button" onClick={() => setConnectionMode('vercel')} className={`flex-1 rounded-md px-3 py-2 text-xs font-bold ${connectionMode === 'vercel' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>Dùng token Vercel</button>
+        {desktopAvailable && <button type="button" onClick={() => setConnectionMode('electron')} className={`flex-1 rounded-md px-3 py-2 text-xs font-bold ${connectionMode === 'electron' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>App Windows (LAN)</button>}
         <button type="button" onClick={() => setConnectionMode('direct')} className={`flex-1 rounded-md px-3 py-2 text-xs font-bold ${connectionMode === 'direct' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>Dán PAT tạm thời</button>
       </div>
 

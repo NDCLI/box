@@ -10,7 +10,27 @@ export interface VercelCvatConnection {
   mode: 'vercel';
 }
 
-export type CvatConnection = DirectCvatConnection | VercelCvatConnection;
+export interface ElectronCvatConnection extends Omit<DirectCvatConnection, 'mode'> {
+  mode: 'electron';
+}
+
+export type CvatConnection = DirectCvatConnection | VercelCvatConnection | ElectronCvatConnection;
+
+type CvatResource = 'tasks' | 'task' | 'annotations' | 'frame';
+
+interface DesktopCvatResponse {
+  status: number;
+  contentType?: string;
+  data: unknown;
+}
+
+declare global {
+  interface Window {
+    cvatDesktop?: {
+      request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; frameId?: string }) => Promise<DesktopCvatResponse>;
+    };
+  }
+}
 
 export interface CvatTaskSummary {
   id: number;
@@ -70,6 +90,12 @@ function apiBaseUrl(serverUrl: string): string {
 }
 
 async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T> {
+  if (connection.mode === 'electron') {
+    const response = await requestDesktop(connection, requestFromPath(path));
+    if (response.status < 200 || response.status >= 300) throw new Error(`CVAT trả về lỗi ${response.status}.`);
+    return response.data as T;
+  }
+
   const response = await fetch(connection.mode === 'vercel' ? proxyUrl(path) : `${apiBaseUrl(connection.serverUrl)}${path}`, {
     headers: {
       Accept: 'application/vnd.cvat+json, application/json',
@@ -85,6 +111,21 @@ async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T
   }
 
   return response.json() as Promise<T>;
+}
+
+function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame'>; taskId?: number } {
+  if (path === '/tasks?limit=100') return { resource: 'tasks' };
+  const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
+  if (!match) throw new Error('Yêu cầu CVAT không được hỗ trợ.');
+  return { resource: match[2] ? 'annotations' : 'task', taskId: Number(match[1]) };
+}
+
+async function requestDesktop(
+  connection: ElectronCvatConnection,
+  request: { resource: CvatResource; taskId?: number; frameId?: string },
+): Promise<DesktopCvatResponse> {
+  if (!window.cvatDesktop) throw new Error('Hãy chạy tính năng này trong app Windows.');
+  return window.cvatDesktop.request({ ...request, serverUrl: connection.serverUrl, token: connection.token });
 }
 
 export async function listCvatTasks(connection: CvatConnection): Promise<CvatTaskSummary[]> {
@@ -179,6 +220,12 @@ function proxyUrl(path: string): string {
 }
 
 export async function loadCvatFrameImage(connection: CvatConnection, taskId: number, frameId: string): Promise<Blob> {
+  if (connection.mode === 'electron') {
+    const response = await requestDesktop(connection, { resource: 'frame', taskId, frameId });
+    if (response.status < 200 || response.status >= 300) throw new Error(`Không thể tải ảnh Frame ${frameId} từ CVAT (${response.status}).`);
+    return new Blob([response.data as Uint8Array], { type: response.contentType });
+  }
+
   const response = await fetch(
     connection.mode === 'vercel'
       ? `/api/cvat?resource=frame&taskId=${taskId}&frameId=${encodeURIComponent(frameId)}`
