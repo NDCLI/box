@@ -148,7 +148,7 @@ function toAttributes(
 }
 
 export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations): CVATDataset {
-  const labels = task.labels ?? [];
+  const labels = Array.isArray(task.labels) ? task.labels : [];
   const labelsById = new Map(labels.map(label => [label.id, label]));
   const attributeNames = new Map<number, string>();
   labels.forEach(label => label.attributes?.forEach(attribute => attributeNames.set(attribute.id, attribute.name)));
@@ -190,9 +190,12 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations): CVA
     getFrame(shape.frame).boxes.push(box);
   };
 
-  (annotations.shapes ?? []).forEach(shape => addShape(shape));
-  (annotations.tracks ?? []).forEach(track => {
-    track.shapes?.forEach(shape => addShape(shape, track.id, track.attributes));
+  const shapes = Array.isArray(annotations.shapes) ? annotations.shapes : [];
+  const tracks = Array.isArray(annotations.tracks) ? annotations.tracks : [];
+
+  shapes.forEach(shape => addShape(shape));
+  tracks.forEach(track => {
+    (Array.isArray(track.shapes) ? track.shapes : []).forEach(shape => addShape(shape, track.id, track.attributes));
   });
 
   for (let frameId = 0; frameId < (task.size ?? 0); frameId++) getFrame(frameId);
@@ -202,7 +205,7 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations): CVA
     taskName: task.name,
     labels: labels.map(label => label.name),
     labelColors: Object.fromEntries(labels.filter(label => label.color).map(label => [label.name, label.color!])),
-    type: (annotations.tracks?.length ?? 0) > 0 ? 'tracks' : 'images',
+    type: tracks.length > 0 ? 'tracks' : 'images',
     frames: [...frameMap.values()].sort((a, b) => Number(a.id) - Number(b.id)),
   };
 }
