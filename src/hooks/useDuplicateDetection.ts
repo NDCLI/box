@@ -173,11 +173,9 @@ export function useDuplicateDetection({
       let frameExtraExclude = 0;
 
       f.boxes.forEach(b => {
-        const id = parseInt(b.id, 10);
-        if (!isNaN(id)) {
-          if (id < minBoxId) minBoxId = id;
-          if (id > maxBoxId) maxBoxId = id;
-        }
+        const id = b.globalIndex;
+        if (id < minBoxId) minBoxId = id;
+        if (id > maxBoxId) maxBoxId = id;
         labelCounts[b.label] = (labelCounts[b.label] || 0) + 1;
 
         const lbl = b.label.toLowerCase();
