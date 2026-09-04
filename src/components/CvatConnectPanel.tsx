@@ -1,5 +1,5 @@
 import { CloudDownload, KeyRound, ListChecks, LoaderCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CVATDataset } from '../types';
 import { listCvatJobs, listCvatTasks, loadCvatJobDataset, type CvatConnection, type CvatJobSummary, type CvatTaskSummary } from '../utils/cvatApi';
 
@@ -17,6 +17,14 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
   const [jobId, setJobId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void window.cvatDesktop?.getStoredToken().then((storedToken) => {
+      if (active && storedToken) setToken(storedToken);
+    });
+    return () => { active = false; };
+  }, []);
 
   const connection = (): CvatConnection => ({ mode: 'electron', serverUrl, token });
 
@@ -37,6 +45,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     setIsLoading(true);
     try {
       const loadedTasks = await listCvatTasks(connection());
+      await window.cvatDesktop?.saveToken(token);
       setTasks(loadedTasks);
       setJobs([]);
       setJobId('');
@@ -85,7 +94,6 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     try {
       const activeConnection = connection();
       onDatasetLoaded(await loadCvatJobDataset(activeConnection, activeTaskId, activeJobId), activeConnection, activeTaskId, activeJobId);
-      setToken('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải annotation Job từ CVAT.');
     } finally {
@@ -111,8 +119,11 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
         <label className="text-xs font-semibold text-slate-600">
           Personal Access Token (Read Only)
           <input value={token} onChange={(event) => setToken(event.target.value)} placeholder="Dán token CVAT" type="password" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" autoComplete="off" />
+          <button type="button" onClick={() => { setToken(''); void window.cvatDesktop?.saveToken(''); }} className="mt-1.5 text-[11px] font-semibold text-slate-500 hover:text-red-600">Xóa PAT đã lưu</button>
         </label>
       </div>
+
+      <p className="mt-2 text-[11px] text-slate-500">PAT được mã hóa theo tài khoản Windows trên thiết bị này; không lưu trong mã nguồn hoặc Vercel.</p>
 
       {!desktopAvailable && <p role="alert" className="mt-3 text-xs font-medium text-amber-700">Kết nối CVAT chỉ dùng trong app Windows.</p>}
 

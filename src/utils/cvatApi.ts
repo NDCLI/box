@@ -28,6 +28,8 @@ declare global {
   interface Window {
     cvatDesktop?: {
       request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; jobId?: number; frameId?: string }) => Promise<DesktopCvatResponse>;
+      getStoredToken: () => Promise<string | null>;
+      saveToken: (token: string) => Promise<void>;
     };
   }
 }

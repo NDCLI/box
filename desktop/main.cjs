@@ -1,9 +1,34 @@
 const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs/promises');
+const { safeStorage } = require('electron');
 
 const APP_ID = 'com.ndcli.cvatboxcounter';
 const APP_TITLE = 'CVAT Box Counter & Duplicate Inspector';
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+
+function storedTokenPath() {
+  return path.join(app.getPath('userData'), 'cvat-pat.bin');
+}
+
+ipcMain.handle('cvat:token:get', async () => {
+  if (!safeStorage.isEncryptionAvailable()) return null;
+  try {
+    return await safeStorage.decryptStringAsync(await fs.readFile(storedTokenPath()));
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle('cvat:token:set', async (_event, value) => {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows không hỗ trợ mã hóa token trên thiết bị này.');
+  const token = typeof value === 'string' ? value.trim() : '';
+  if (!token) {
+    await fs.rm(storedTokenPath(), { force: true });
+    return;
+  }
+  await fs.writeFile(storedTokenPath(), await safeStorage.encryptStringAsync(token));
+});
 
 function cvatApiBaseUrl(serverUrl) {
   const parsedUrl = new URL(serverUrl);
