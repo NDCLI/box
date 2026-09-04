@@ -156,6 +156,7 @@ export default function App() {
             onDragOver={fp.handleDragOver}
             onDragLeave={fp.handleDragLeave}
             onDrop={fp.handleDrop}
+            onCvatDatasetLoaded={fp.loadDataset}
           />
         )}
 

@@ -37,6 +37,7 @@ export interface UseFileProcessorReturn {
   handleDragLeave: () => void;
   handleDrop: (e: React.DragEvent) => Promise<void>;
   handleXmlPathChange: (path: string) => Promise<void>;
+  loadDataset: (dataset: CVATDataset) => void;
   resetState: () => void;
 }
 
@@ -211,6 +212,15 @@ export function useFileProcessor(
     }
   }, [zipEntries]);
 
+  const loadDataset = useCallback((parsed: CVATDataset) => {
+    resetState();
+    setFile(new File([JSON.stringify({ source: 'CVAT API', taskId: parsed.taskName })], parsed.filename, { type: 'application/json' }));
+    setXmlFilename(parsed.filename);
+    setDataset(parsed);
+    setSuccessMsg(`Đã tải annotation của ${parsed.taskName || parsed.filename} từ CVAT.`);
+    onDatasetParsedRef.current?.(parsed);
+  }, [resetState]);
+
   // Parse XML when content changes
   useEffect(() => {
     if (!xmlContent) return;
@@ -245,6 +255,7 @@ export function useFileProcessor(
     handleDragLeave,
     handleDrop,
     handleXmlPathChange,
+    loadDataset,
     resetState,
   };
 }

@@ -18,6 +18,7 @@ function renderUploadZone() {
         onDragOver={() => {}}
         onDragLeave={() => {}}
         onDrop={() => {}}
+        onCvatDatasetLoaded={() => {}}
       />,
     );
   });

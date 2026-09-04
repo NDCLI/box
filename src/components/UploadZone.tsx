@@ -8,6 +8,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import type { CVATDataset } from '../types';
+import CvatConnectPanel from './CvatConnectPanel';
 
 interface UploadZoneProps {
   isDragging: boolean;
@@ -17,6 +19,7 @@ interface UploadZoneProps {
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
+  onCvatDatasetLoaded: (dataset: CVATDataset) => void;
 }
 
 const benefits = [
@@ -33,6 +36,7 @@ export default function UploadZone({
   onDragOver,
   onDragLeave,
   onDrop,
+  onCvatDatasetLoaded,
 }: UploadZoneProps) {
   return (
     <motion.section
@@ -83,6 +87,8 @@ export default function UploadZone({
         <p className="app-upload-security">
           <ShieldCheck aria-hidden="true" /> File được phân tích ngay trên trình duyệt, không rời khỏi thiết bị.
         </p>
+
+        <CvatConnectPanel onDatasetLoaded={onCvatDatasetLoaded} />
       </div>
 
       <div className="app-benefits" aria-label="Tính năng chính">
