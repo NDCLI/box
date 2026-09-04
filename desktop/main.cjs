@@ -25,14 +25,15 @@ function cvatPath({ resource, taskId, frameId }) {
 }
 
 ipcMain.handle('cvat:request', async (_event, request) => {
-  if (!request || typeof request.serverUrl !== 'string' || typeof request.token !== 'string' || request.token.length === 0) {
+  const token = typeof request?.token === 'string' ? request.token.trim() : '';
+  if (!request || typeof request.serverUrl !== 'string' || token.length === 0) {
     throw new Error('Thiếu URL CVAT hoặc token.');
   }
 
   const resource = request.resource;
   const response = await fetch(`${cvatApiBaseUrl(request.serverUrl)}${cvatPath(request)}`, {
     headers: {
-      Authorization: `Token ${request.token}`,
+      Authorization: `Token ${token}`,
       Accept: resource === 'frame' ? 'image/*' : 'application/vnd.cvat+json, application/json',
     },
   });

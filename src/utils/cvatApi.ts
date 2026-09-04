@@ -92,7 +92,11 @@ function apiBaseUrl(serverUrl: string): string {
 async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T> {
   if (connection.mode === 'electron') {
     const response = await requestDesktop(connection, requestFromPath(path));
-    if (response.status < 200 || response.status >= 300) throw new Error(`CVAT trả về lỗi ${response.status}.`);
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(response.status === 401 || response.status === 403
+        ? 'PAT không hợp lệ, đã hết hạn hoặc không có quyền đọc CVAT.'
+        : `CVAT trả về lỗi ${response.status}.`);
+    }
     return response.data as T;
   }
 
@@ -125,7 +129,7 @@ async function requestDesktop(
   request: { resource: CvatResource; taskId?: number; frameId?: string },
 ): Promise<DesktopCvatResponse> {
   if (!window.cvatDesktop) throw new Error('Hãy chạy tính năng này trong app Windows.');
-  return window.cvatDesktop.request({ ...request, serverUrl: connection.serverUrl, token: connection.token });
+  return window.cvatDesktop.request({ ...request, serverUrl: connection.serverUrl.trim(), token: connection.token.trim() });
 }
 
 export async function listCvatTasks(connection: CvatConnection): Promise<CvatTaskSummary[]> {
