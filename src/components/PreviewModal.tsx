@@ -18,6 +18,7 @@ interface PreviewModalProps {
   currentImageSrc: string | null;
   imageLoading: boolean;
   imageError: string | null;
+  imageDimensions: { width: number; height: number } | null;
   customZoomPadding: number;
   onCustomZoomPaddingChange: (value: number) => void;
   onClose: () => void;
@@ -31,11 +32,14 @@ export default function PreviewModal({
   currentImageSrc,
   imageLoading,
   imageError,
+  imageDimensions,
   customZoomPadding,
   onCustomZoomPaddingChange,
   onClose
 }: PreviewModalProps) {
   const transformComponentRef = useRef<ZoomControls | null>(null);
+  const imageWidth = imageDimensions?.width ?? selectedFrameData.width;
+  const imageHeight = imageDimensions?.height ?? selectedFrameData.height;
 
   const frameDuplicateBoxIds = useMemo(() => {
     const ids = duplicateGroups
@@ -156,7 +160,7 @@ export default function PreviewModal({
 
                   {/* Coordinate indicator */}
                   <div className="self-start flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-mono text-slate-400 bg-slate-900/80 px-2.5 py-1 rounded-md border border-slate-800 backdrop-blur-xs z-10">
-                    <span>Kích thước: {selectedFrameData.width} &times; {selectedFrameData.height} px</span>
+                    <span>Kích thước: {imageWidth} &times; {imageHeight} px</span>
                     <span className="text-slate-600">|</span>
                     {currentImageSrc ? (
                       <span className="text-emerald-400 flex items-center gap-1 font-sans font-bold">
@@ -185,8 +189,8 @@ export default function PreviewModal({
                     )}
 
                     <CustomZoomPanPinch
-      contentWidth={selectedFrameData.width}
-      contentHeight={selectedFrameData.height}
+      contentWidth={imageWidth}
+      contentHeight={imageHeight}
       onZoomToElementRef={transformComponentRef}
     >
 
@@ -199,22 +203,22 @@ export default function PreviewModal({
                         return (
 
                           <svg
-                            viewBox={`0 0 ${selectedFrameData.width} ${selectedFrameData.height}`}
+                            viewBox={`0 0 ${imageWidth} ${imageHeight}`}
                             className="w-full h-full border border-slate-800 shadow-2xl"
                           >
                         {/* Background drawing (Image or solid dark color) */}
                         {currentImageSrc ? (
                           <image
                             href={currentImageSrc}
-                            width={selectedFrameData.width}
-                            height={selectedFrameData.height}
+                            width={imageWidth}
+                            height={imageHeight}
 
                             preserveAspectRatio="none"
                           />
                         ) : (
                           <rect
-                            width={selectedFrameData.width}
-                            height={selectedFrameData.height}
+                            width={imageWidth}
+                            height={imageHeight}
                             fill="#090d16"
                           />
                         )}

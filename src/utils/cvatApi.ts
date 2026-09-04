@@ -81,6 +81,22 @@ interface CvatAnnotations {
   tracks?: CvatTrack[];
 }
 
+function normalizeLabels(value: unknown): CvatLabel[] {
+  const candidates = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object' && Array.isArray((value as { results?: unknown }).results)
+      ? (value as { results: unknown[] }).results
+      : value && typeof value === 'object'
+        ? Object.values(value)
+        : [];
+
+  return candidates.filter((label): label is CvatLabel => (
+    Boolean(label) && typeof label === 'object' &&
+    typeof (label as CvatLabel).id === 'number' &&
+    typeof (label as CvatLabel).name === 'string'
+  ));
+}
+
 function apiBaseUrl(serverUrl: string): string {
   const normalized = serverUrl.trim().replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(normalized)) {
@@ -148,7 +164,7 @@ function toAttributes(
 }
 
 export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations): CVATDataset {
-  const labels = Array.isArray(task.labels) ? task.labels : [];
+  const labels = normalizeLabels(task.labels);
   const labelsById = new Map(labels.map(label => [label.id, label]));
   const attributeNames = new Map<number, string>();
   labels.forEach(label => label.attributes?.forEach(attribute => attributeNames.set(attribute.id, attribute.name)));

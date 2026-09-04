@@ -242,6 +242,7 @@ export default function App() {
             currentImageSrc={frameImage.currentImageSrc}
             imageLoading={frameImage.imageLoading}
             imageError={frameImage.imageError}
+            imageDimensions={frameImage.imageDimensions}
             customZoomPadding={customZoomPadding}
             onCustomZoomPaddingChange={setCustomZoomPadding}
             onClose={() => detection.setSelectedGroupId(null)}

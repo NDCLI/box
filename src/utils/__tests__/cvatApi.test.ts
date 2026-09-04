@@ -44,4 +44,15 @@ describe('toCvatDataset', () => {
     expect(dataset.frames).toHaveLength(1);
     expect(dataset.frames[0].boxes[0].trackId).toBe('5');
   });
+
+  it('uses label names when CVAT returns labels as an object', () => {
+    const dataset = toCvatDataset(
+      { id: 3, name: 'Object labels', labels: { 8: { id: 8, name: 'helmet' } } } as never,
+      { shapes: [{ label_id: 8, frame: 0, type: 'rectangle', points: [0, 0, 50, 60] }] },
+    );
+
+    expect(dataset.labels).toEqual(['helmet']);
+    expect(dataset.frames[0]).toMatchObject({ width: 50, height: 60 });
+    expect(dataset.frames[0].boxes[0].label).toBe('helmet');
+  });
 });

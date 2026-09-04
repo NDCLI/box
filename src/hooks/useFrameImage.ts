@@ -19,6 +19,18 @@ export interface UseFrameImageReturn {
   currentImageSrc: string | null;
   imageLoading: boolean;
   imageError: string | null;
+  imageDimensions: { width: number; height: number } | null;
+}
+
+async function getImageDimensions(blob: Blob): Promise<{ width: number; height: number } | null> {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const dimensions = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dimensions;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -56,6 +68,7 @@ export function useFrameImage({
   const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // Effect to load frame image from ZIP or manual map when active frame changes
   useEffect(() => {
@@ -66,10 +79,12 @@ export function useFrameImage({
       if (!selectedFrameData) {
         setCurrentImageSrc(null);
         setImageError(null);
+        setImageDimensions(null);
         return;
       }
 
       setImageError(null);
+      setImageDimensions(null);
 
       // 1. Check if we have a manual image uploaded for this frame
       if (manualImages[selectedFrameData.name]) {
@@ -85,6 +100,7 @@ export function useFrameImage({
           const blob = await loadCvatFrameImage(cvatFrameSource.connection, cvatFrameSource.taskId, selectedFrameData.id);
           if (active) {
             localUrl = URL.createObjectURL(blob);
+            setImageDimensions(await getImageDimensions(blob));
             setCurrentImageSrc(localUrl);
           }
         } catch (err) {
@@ -114,6 +130,7 @@ export function useFrameImage({
             const blob = await (entry as any).getData(new BlobWriter());
             if (active) {
               localUrl = URL.createObjectURL(blob);
+              setImageDimensions(await getImageDimensions(blob));
               setCurrentImageSrc(localUrl);
             }
           } else {
@@ -140,5 +157,5 @@ export function useFrameImage({
     };
   }, [selectedFrameData, zipEntries, manualImages, cvatFrameSource]);
 
-  return { currentImageSrc, imageLoading, imageError };
+  return { currentImageSrc, imageLoading, imageError, imageDimensions };
 }
