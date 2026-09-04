@@ -37,6 +37,16 @@ npm run desktop:dist
 Remove-Item Env:CVAT_DEFAULT_PAT
 ```
 
+Để tạo gói Microsoft Store có PAT mặc định trong cùng cửa sổ PowerShell:
+
+```powershell
+$env:CVAT_DEFAULT_PAT = 'PAT-CVAT-CUA-BAN'
+npm run desktop:store
+Remove-Item Env:CVAT_DEFAULT_PAT
+```
+
+Gói MSIX/MSIXUPLOAD được xuất vào `release/windows/`. Trước khi nộp Partner Center, reserve tên ứng dụng và cập nhật Identity Name/Publisher theo giá trị Partner Center cấp.
+
 Các file `.exe` được tạo trong thư mục `release/windows/`. Bản phát hành hiện chưa được ký mã nên Windows SmartScreen có thể hiển thị cảnh báo.
 
 ## Đọc trực tiếp từ CVAT

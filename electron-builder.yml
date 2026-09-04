@@ -1,6 +1,8 @@
 appId: com.ndcli.cvatboxcounter
 productName: CVAT Box Counter & Duplicate Inspector
 asar: true
+toolsets:
+  winCodeSign: "1.1.0"
 directories:
   output: release/windows
 files:
@@ -27,3 +29,11 @@ nsis:
   artifactName: CVAT-Box-Counter-Setup-${version}-win-${arch}.${ext}
 portable:
   artifactName: CVAT-Box-Counter-${version}-portable-win-${arch}.${ext}
+msix:
+  applicationId: CVATBoxCounter
+  displayName: CVAT Box Counter & Duplicate Inspector
+  publisherDisplayName: NDCLI
+  capabilities:
+    - privateNetworkClientServer
+  createMsixupload: true
+  artifactName: CVAT-Box-Counter-Store-${version}-win-${arch}.${ext}

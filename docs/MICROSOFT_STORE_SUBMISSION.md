@@ -116,3 +116,13 @@ No test account is required.
 ## MSIX build prerequisites
 
 The final MSIX must use the Identity Name and Publisher provided by Partner Center. It must also include Store logo assets. Do not submit a package with an embedded shared CVAT PAT: a Store package is public and that token can be extracted. Keep the embedded-token option for internal Setup/Portable distributions only.
+
+## Build command
+
+Run this command in the same PowerShell session where `CVAT_DEFAULT_PAT` is set:
+
+```powershell
+npm run desktop:store
+```
+
+The output is an MSIX/MSIXUPLOAD package in `release/windows/`. Before final submission, replace the MSIX Identity Name and Publisher in `electron-builder.yml` with the values assigned by Partner Center.
