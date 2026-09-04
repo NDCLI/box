@@ -2,7 +2,7 @@ appId: com.ndcli.cvatboxcounter
 productName: CVAT Box Counter & Duplicate Inspector
 asar: true
 directories:
-  output: release
+  output: release/windows
 files:
   - dist-desktop/**/*
   - desktop/main.cjs
