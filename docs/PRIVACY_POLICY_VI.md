@@ -1,8 +1,8 @@
-# Chính sách quyền riêng tư — CVAT Box Counter & Duplicate Inspector
+# Chính sách quyền riêng tư — CVAT Box Audit
 
-Ngày hiệu lực: [NGÀY THÁNG NĂM]
+Ngày hiệu lực: 05/09/2026
 
-CVAT Box Counter & Duplicate Inspector là ứng dụng kiểm tra annotation CVAT trên Windows, do Hoakim phát hành. Chính sách này áp dụng cho bản Store được build với PostHog tắt.
+CVAT Box Audit là ứng dụng kiểm tra annotation CVAT trên Windows, do Hoakim phát hành. Chính sách này áp dụng cho bản Store được build với PostHog tắt.
 
 ## Dữ liệu được xử lý
 
@@ -24,4 +24,4 @@ Token nhập tay được ưu tiên thay token mặc định, mã hóa bằng c�
 
 ## Liên hệ
 
-Nếu có câu hỏi về quyền riêng tư, liên hệ: [EMAIL HỖ TRỢ] hoặc [URL HỖ TRỢ HTTPS].
+Nếu có câu hỏi về quyền riêng tư hoặc yêu cầu hỗ trợ, vui lòng tạo yêu cầu tại [GitHub Issues của CVAT Box Audit](https://github.com/NDCLI/box/issues).
