@@ -30,9 +30,11 @@ nsis:
 portable:
   artifactName: CVAT-Box-Counter-${version}-portable-win-${arch}.${ext}
 appx:
+  identityName: Hoakim.CVATBoxAudit
+  publisher: CN=06970FBF-6DEA-4FD9-BB5E-DCC0D8D933EB
   applicationId: CVATBoxCounter
   displayName: CVAT Box Counter & Duplicate Inspector
-  publisherDisplayName: NDCLI
+  publisherDisplayName: Hoakim
   capabilities:
     - privateNetworkClientServer
   artifactName: CVAT-Box-Counter-Store-${version}-win-${arch}.${ext}

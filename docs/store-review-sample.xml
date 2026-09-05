@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<annotations>
+  <version>1.1</version>
+  <image id="0" name="sample-0.jpg" width="640" height="480">
+    <box label="car" xtl="50" ytl="50" xbr="200" ybr="200" occluded="0" />
+    <box label="car" xtl="50" ytl="50" xbr="200" ybr="200" occluded="0" />
+    <box label="_exclude" xtl="400" ytl="100" xbr="450" ybr="150" occluded="0" />
+  </image>
+  <image id="1" name="sample-1.jpg" width="640" height="480">
+    <box label="_skip" xtl="0" ytl="0" xbr="640" ybr="480" occluded="0" />
+    <box label="car" xtl="50" ytl="50" xbr="200" ybr="200" occluded="0" />
+    <box label="car" xtl="50" ytl="50" xbr="200" ybr="200" occluded="0" />
+  </image>
+  <image id="2" name="sample-2.jpg" width="640" height="480">
+    <box label="car" xtl="300" ytl="100" xbr="450" ybr="300" occluded="0" />
+  </image>
+</annotations>
