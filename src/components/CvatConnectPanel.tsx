@@ -1,4 +1,4 @@
-import { CloudDownload, KeyRound, ListChecks, LoaderCircle, RefreshCw } from 'lucide-react';
+import { CloudDownload, KeyRound, ListChecks, LoaderCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CVATDataset } from '../types';
 import { listCvatJobs, listCvatTasks, loadCvatJobDataset, type CvatConnection, type CvatJobSummary, type CvatTaskSummary } from '../utils/cvatApi';
@@ -170,9 +170,6 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
         </label>
         <button type="button" onClick={handleLoadJob} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
           <KeyRound className="h-4 w-4" /> Tải annotation Job
-        </button>
-        <button type="button" onClick={handleLoadJob} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-60" title="Tải lại annotation của Job đang chọn">
-          <RefreshCw className="h-4 w-4" /> Tải lại
         </button>
       </div>
 

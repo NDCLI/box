@@ -1,6 +1,7 @@
 import {
   FileCode,
   FileArchive,
+  RefreshCw,
   X
 } from 'lucide-react';
 import { type CVATDataset } from '../types';
@@ -14,6 +15,8 @@ interface FileInfoBarProps {
   selectedXmlPath: string;
   onXmlPathChange: (path: string) => void;
   onClose: () => void;
+  onRefreshJob?: () => void;
+  isRefreshingJob?: boolean;
 }
 
 export default function FileInfoBar({
@@ -23,7 +26,9 @@ export default function FileInfoBar({
   xmlFilesInZip,
   selectedXmlPath,
   onXmlPathChange,
-  onClose
+  onClose,
+  onRefreshJob,
+  isRefreshingJob = false
 }: FileInfoBarProps) {
   return (
     <div className="app-panel app-file-bar bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -64,12 +69,24 @@ export default function FileInfoBar({
           </div>
         )}
 
+        {onRefreshJob && (
+          <button
+            type="button"
+            onClick={onRefreshJob}
+            disabled={isRefreshingJob}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingJob ? 'animate-spin' : ''}`} />
+            {isRefreshingJob ? 'Đang tải lại…' : 'Tải lại Job'}
+          </button>
+        )}
+
         <button
           onClick={onClose}
           className="inline-flex items-center space-x-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
         >
           <X className="w-3.5 h-3.5" />
-          <span>Đóng file</span>
+          <span>{onRefreshJob ? 'Đóng Job' : 'Đóng file'}</span>
         </button>
       </div>
     </div>

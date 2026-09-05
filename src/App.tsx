@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback } from 'react';
+import { lazy, Suspense, useState, useCallback, useRef } from 'react';
 
 // Hooks
 import { useFileProcessor } from './hooks/useFileProcessor';
@@ -19,6 +19,7 @@ const PreviewModal = lazy(() => import('./components/PreviewModal'));
 
 // Utils
 import { removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
+import { loadCvatJobDataset } from './utils/cvatApi';
 
 export default function App() {
   // ── Exclude labels (persisted to localStorage) ──
@@ -40,6 +41,8 @@ export default function App() {
   // ── Manual images mapping ──
   const [manualImages, setManualImages] = useState<Record<string, string>>({});
   const [cvatFrameSource, setCvatFrameSource] = useState<CvatFrameSource | null>(null);
+  const [isRefreshingJob, setIsRefreshingJob] = useState(false);
+  const refreshRequest = useRef(0);
 
   // ── Visualizer settings ──
   const [customZoomPadding, setCustomZoomPadding] = useState<number>(60);
@@ -70,6 +73,8 @@ export default function App() {
 
   // ── Extended reset (clean up manual images too) ──
   const handleReset = useCallback(() => {
+    refreshRequest.current++;
+    setIsRefreshingJob(false);
     fp.resetState();
     setCvatFrameSource(null);
     setManualImages((prev) => {
@@ -79,6 +84,26 @@ export default function App() {
       return {};
     });
   }, [fp]);
+
+  const handleRefreshJob = async () => {
+    if (!cvatFrameSource?.jobId || isRefreshingJob) return;
+    const requestId = ++refreshRequest.current;
+    const { connection, taskId, jobId } = cvatFrameSource;
+    setIsRefreshingJob(true);
+    fp.setError(null);
+    fp.setSuccessMsg(null);
+    try {
+      const dataset = await loadCvatJobDataset(connection, taskId, jobId);
+      if (refreshRequest.current !== requestId) return;
+      fp.loadDataset(dataset);
+    } catch (err) {
+      if (refreshRequest.current === requestId) {
+        fp.setError(err instanceof Error ? err.message : 'Không thể tải lại annotation Job từ CVAT.');
+      }
+    } finally {
+      if (refreshRequest.current === requestId) setIsRefreshingJob(false);
+    }
+  };
 
   // ── Label filter handlers ──
   const handleLabelToggle = useCallback((label: string) => {
@@ -150,7 +175,7 @@ export default function App() {
 
       <main className="app-main flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Upload Zone (shown when no dataset loaded) */}
-        {!fp.dataset && (
+        <div hidden={Boolean(fp.dataset)}>
           <UploadZone
             isDragging={fp.isDragging}
             fileInputRef={fp.fileInputRef}
@@ -164,7 +189,7 @@ export default function App() {
               fp.loadDataset(dataset);
             }}
           />
-        )}
+        </div>
 
         {/* Status banners */}
         <StatusBanners
@@ -186,6 +211,8 @@ export default function App() {
               selectedXmlPath={fp.selectedXmlPath}
               onXmlPathChange={fp.handleXmlPathChange}
               onClose={handleReset}
+              onRefreshJob={cvatFrameSource?.jobId ? handleRefreshJob : undefined}
+              isRefreshingJob={isRefreshingJob}
             />
 
             <ConfigPanel
