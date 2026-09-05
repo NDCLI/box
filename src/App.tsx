@@ -19,7 +19,7 @@ const PreviewModal = lazy(() => import('./components/PreviewModal'));
 
 // Utils
 import { removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
-import { loadCvatJobDataset } from './utils/cvatApi';
+import { loadCvatJobDataset, loadCvatTaskDataset } from './utils/cvatApi';
 
 export default function App() {
   // ── Exclude labels (persisted to localStorage) ──
@@ -86,19 +86,21 @@ export default function App() {
   }, [fp]);
 
   const handleRefreshJob = async () => {
-    if (!cvatFrameSource?.jobId || isRefreshingJob) return;
+    if (!cvatFrameSource || isRefreshingJob) return;
     const requestId = ++refreshRequest.current;
     const { connection, taskId, jobId } = cvatFrameSource;
     setIsRefreshingJob(true);
     fp.setError(null);
     fp.setSuccessMsg(null);
     try {
-      const dataset = await loadCvatJobDataset(connection, taskId, jobId);
+      const dataset = jobId
+        ? await loadCvatJobDataset(connection, taskId, jobId)
+        : await loadCvatTaskDataset(connection, taskId);
       if (refreshRequest.current !== requestId) return;
       fp.loadDataset(dataset);
     } catch (err) {
       if (refreshRequest.current === requestId) {
-        fp.setError(err instanceof Error ? err.message : 'Không thể tải lại annotation Job từ CVAT.');
+        fp.setError(err instanceof Error ? err.message : 'Không thể tải lại annotation từ CVAT.');
       }
     } finally {
       if (refreshRequest.current === requestId) setIsRefreshingJob(false);
@@ -211,7 +213,8 @@ export default function App() {
               selectedXmlPath={fp.selectedXmlPath}
               onXmlPathChange={fp.handleXmlPathChange}
               onClose={handleReset}
-              onRefreshJob={cvatFrameSource?.jobId ? handleRefreshJob : undefined}
+              onRefreshJob={cvatFrameSource ? handleRefreshJob : undefined}
+              cvatScope={cvatFrameSource?.jobId ? 'Job' : 'Task'}
               isRefreshingJob={isRefreshingJob}
             />
 

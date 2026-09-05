@@ -2,13 +2,14 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
-import { listCvatJobs, listCvatTasks, loadCvatJobDataset } from './utils/cvatApi';
+import { listCvatJobs, listCvatTasks, loadCvatJobDataset, loadCvatTaskDataset } from './utils/cvatApi';
 import type { CVATDataset } from './types';
 
 vi.mock('./utils/cvatApi', () => ({
   listCvatTasks: vi.fn(),
   listCvatJobs: vi.fn(),
   loadCvatJobDataset: vi.fn(),
+  loadCvatTaskDataset: vi.fn(),
   loadCvatFrameImage: vi.fn(),
 }));
 
@@ -94,5 +95,21 @@ describe('CVAT Job session', () => {
     await act(async () => finish(dataset('late-response.json')));
     expect(container.querySelector('.app-file-bar')).toBeNull();
     expect(container.querySelector('.app-upload-stage')?.closest('[hidden]')).toBeNull();
+  });
+
+  it('opens and refreshes the whole Task without a Job, then keeps the selection on close', async () => {
+    vi.mocked(listCvatJobs).mockResolvedValueOnce([]);
+    vi.mocked(loadCvatTaskDataset).mockResolvedValue(dataset('task-10.json'));
+    await click('Lấy danh sách Task');
+    await click('Mở cả Task');
+    expect(container.querySelector('.app-file-bar')?.textContent).toContain('task-10.json');
+    await click('Tải lại Task');
+    expect(loadCvatTaskDataset).toHaveBeenCalledTimes(2);
+    expect(loadCvatTaskDataset).toHaveBeenLastCalledWith(expect.objectContaining({ token: 'test-token' }), 10);
+    expect(loadCvatJobDataset).not.toHaveBeenCalled();
+    await click('Đóng Task');
+    expect([...container.querySelectorAll('select')].some(select => select.value === '10')).toBe(true);
+    expect(listCvatTasks).toHaveBeenCalledTimes(1);
+    expect(listCvatJobs).toHaveBeenCalledTimes(1);
   });
 });

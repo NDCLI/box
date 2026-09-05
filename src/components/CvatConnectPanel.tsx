@@ -1,7 +1,7 @@
 import { CloudDownload, KeyRound, ListChecks, LoaderCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CVATDataset } from '../types';
-import { listCvatJobs, listCvatTasks, loadCvatJobDataset, type CvatConnection, type CvatJobSummary, type CvatTaskSummary } from '../utils/cvatApi';
+import { listCvatJobs, listCvatTasks, loadCvatJobDataset, loadCvatTaskDataset, type CvatConnection, type CvatJobSummary, type CvatTaskSummary } from '../utils/cvatApi';
 
 interface CvatConnectPanelProps {
   onDatasetLoaded: (dataset: CVATDataset, connection: CvatConnection, taskId: number, jobId?: number) => void;
@@ -91,11 +91,11 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     }
   };
 
-  const handleLoadJob = async () => {
+  const handleLoad = async (wholeTask: boolean) => {
     const activeTaskId = Number(taskId);
     const activeJobId = Number(jobId);
-    if (!Number.isInteger(activeTaskId) || activeTaskId < 1 || !Number.isInteger(activeJobId) || activeJobId < 1) {
-      setError('Chọn Task và Job hợp lệ.');
+    if (!Number.isInteger(activeTaskId) || activeTaskId < 1 || (!wholeTask && (!Number.isInteger(activeJobId) || activeJobId < 1))) {
+      setError(wholeTask ? 'Chọn Task hợp lệ.' : 'Chọn Task và Job hợp lệ.');
       return;
     }
 
@@ -103,9 +103,12 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     setIsLoading(true);
     try {
       const activeConnection = connection();
-      onDatasetLoaded(await loadCvatJobDataset(activeConnection, activeTaskId, activeJobId), activeConnection, activeTaskId, activeJobId);
+      const dataset = wholeTask
+        ? await loadCvatTaskDataset(activeConnection, activeTaskId)
+        : await loadCvatJobDataset(activeConnection, activeTaskId, activeJobId);
+      onDatasetLoaded(dataset, activeConnection, activeTaskId, wholeTask ? undefined : activeJobId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể tải annotation Job từ CVAT.');
+      setError(err instanceof Error ? err.message : 'Không thể tải annotation từ CVAT.');
     } finally {
       setIsLoading(false);
     }
@@ -117,7 +120,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
         <span className="rounded-xl bg-blue-50 p-2.5 text-blue-600"><CloudDownload className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold text-slate-900">Đọc trực tiếp từ CVAT</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Chọn Task, Job và tải annotation trực tiếp từ app Windows.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Mở một Job hoặc cả Task để kiểm tra annotation từ CVAT.</p>
         </div>
       </div>
 
@@ -168,8 +171,11 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
             <input value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="Lấy danh sách hoặc nhập Job ID" inputMode="numeric" disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
           )}
         </label>
-        <button type="button" onClick={handleLoadJob} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
+        <button type="button" onClick={() => void handleLoad(false)} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
           <KeyRound className="h-4 w-4" /> Tải annotation Job
+        </button>
+        <button type="button" onClick={() => void handleLoad(true)} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-60">
+          <CloudDownload className="h-4 w-4" /> Mở cả Task
         </button>
       </div>
 
