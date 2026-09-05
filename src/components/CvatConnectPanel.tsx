@@ -3,13 +3,18 @@ import { useEffect, useState } from 'react';
 import type { CVATDataset } from '../types';
 import { listCvatJobs, listCvatTasks, loadCvatJobDataset, loadCvatTaskDataset, type CvatConnection, type CvatJobSummary, type CvatTaskSummary } from '../utils/cvatApi';
 
+const DEFAULT_SERVERS = [
+  'http://10.43.2.147:8080',
+  'http://10.43.2.12:8080',
+];
+
 interface CvatConnectPanelProps {
   onDatasetLoaded: (dataset: CVATDataset, connection: CvatConnection, taskId: number, jobId?: number) => void;
 }
 
 export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelProps) {
   const desktopAvailable = Boolean(window.cvatDesktop);
-  const [serverUrl, setServerUrl] = useState('http://10.43.2.147:8080');
+  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVERS[0]);
   const [token, setToken] = useState('');
   const [tasks, setTasks] = useState<CvatTaskSummary[]>([]);
   const [taskId, setTaskId] = useState('');
@@ -126,8 +131,13 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="text-xs font-semibold text-slate-600">
-          URL CVAT
-          <input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} placeholder="https://cvat.example.com" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" autoComplete="url" />
+          Server CVAT mặc định
+          <select value={DEFAULT_SERVERS.includes(serverUrl) ? serverUrl : ''} onChange={(event) => setServerUrl(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            {DEFAULT_SERVERS.map((server) => <option key={server} value={server}>{server}</option>)}
+            {!DEFAULT_SERVERS.includes(serverUrl) && <option value="">URL tùy chỉnh</option>}
+          </select>
+          <span className="mt-1.5 block text-[11px] font-normal text-slate-500">Hoặc nhập URL tùy chỉnh:</span>
+          <input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} placeholder="https://cvat.example.com" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" autoComplete="url" />
         </label>
         <label className="text-xs font-semibold text-slate-600">
           Personal Access Token (Read Only)

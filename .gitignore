@@ -7,5 +7,6 @@ coverage/
 .DS_Store
 *.log
 .env*
+token.txt
 desktop/generated/
 !.env.example

@@ -18,12 +18,7 @@ async function main() {
 
   // Desktop Store distribution uses the no-analytics privacy policy.
   process.env.VITE_POSTHOG_KEY = '';
-  const tokenFile = path.join(__dirname, 'generated', 'default-token.cjs');
-  if (process.env.CVAT_DEFAULT_PAT !== undefined || !fs.existsSync(tokenFile)) {
-    require('./prepare-default-token.cjs');
-  } else {
-    console.log('Keeping the existing generated default-token configuration.');
-  }
+  require('./prepare-default-tokens.cjs');
   require('./clean-release.cjs');
   execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'prepare-store-assets.ps1')], { stdio: 'inherit', windowsHide: true });
   const cachedKit = path.join(process.env.LOCALAPPDATA || '', 'electron-builder', 'Cache', 'win-codesign@1.1.0', 'windows-kits-bundle-10_0_26100_0-1pell', 'x64');

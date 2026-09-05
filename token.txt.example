@@ -1,0 +1,4 @@
+# Build-time token map. Copy this file to token.txt locally and replace values.
+# token.txt is ignored by Git and is never packaged with the app.
+http://10.43.2.147:8080=PASTE_READ_ONLY_PAT_FOR_SERVER_147_HERE
+http://10.43.2.12:8080=PASTE_READ_ONLY_PAT_FOR_SERVER_12_HERE

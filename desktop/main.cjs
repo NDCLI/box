@@ -15,6 +15,21 @@ function defaultToken() {
   }
 }
 
+function defaultTokens() {
+  try {
+    return require('./generated/default-tokens.cjs');
+  } catch {
+    const token = defaultToken();
+    return token ? { '*': token } : {};
+  }
+}
+
+function tokenForServer(serverUrl) {
+  const normalized = String(serverUrl || '').trim().replace(/\/+$/, '').toLowerCase();
+  const tokens = defaultTokens();
+  return tokens[normalized] || tokens['*'] || '';
+}
+
 function storedTokenPath() {
   return path.join(app.getPath('userData'), 'cvat-pat.bin');
 }
@@ -47,7 +62,7 @@ ipcMain.handle('cvat:token:set', async (_event, value) => {
   await fs.writeFile(storedTokenPath(), encryptToken(token));
 });
 
-ipcMain.handle('cvat:token:has-default', () => Boolean(defaultToken()));
+ipcMain.handle('cvat:token:has-default', () => Object.keys(defaultTokens()).length > 0);
 
 function cvatApiBaseUrl(serverUrl) {
   const parsedUrl = new URL(serverUrl);
@@ -76,7 +91,7 @@ function cvatPath({ resource, taskId, jobId, frameId }) {
 
 ipcMain.handle('cvat:request', async (_event, request) => {
   const suppliedToken = typeof request?.token === 'string' ? request.token.trim() : '';
-  const token = suppliedToken || defaultToken();
+  const token = suppliedToken || tokenForServer(request?.serverUrl);
   if (!request || typeof request.serverUrl !== 'string' || token.length === 0) {
     throw new Error('Thiếu URL CVAT hoặc token.');
   }
