@@ -8,7 +8,7 @@ CVAT Tools là ứng dụng kiểm tra annotation CVAT trên Windows, do cvattoo
 
 Ứng dụng xử lý file XML, ZIP, annotation và ảnh Frame mà người dùng chọn. Dữ liệu này được xử lý cục bộ trên thiết bị.
 
-Khi dùng kết nối CVAT, ứng dụng gửi yêu cầu trực tiếp từ thiết bị đến server do người dùng hoặc tổ chức chỉ định. Server nhận token xác thực, mã Task/Job/Frame được yêu cầu và thông tin kết nối như địa chỉ IP. Việc lưu nhật ký phía CVAT phụ thuộc chính sách của đơn vị vận hành server. Ứng dụng chỉ gửi yêu cầu đọc annotation/ảnh, không sửa dữ liệu trên server.
+Khi dùng kết nối CVAT, ứng dụng gửi yêu cầu trực tiếp từ thiết bị đến server do người dùng hoặc tổ chức chỉ định. Server nhận token xác thực, mã Task/Job/Frame được yêu cầu và thông tin kết nối như địa chỉ IP. Việc lưu nhật ký phía CVAT phụ thuộc chính sách của đơn vị vận hành server. Ứng dụng gửi yêu cầu đọc annotation/ảnh; trên desktop, chỉ sau khi người dùng xác nhận, ứng dụng mới gửi yêu cầu xóa các Shape đã chọn trên CVAT sau bước kiểm tra và sao lưu.
 
 ## Token CVAT
 

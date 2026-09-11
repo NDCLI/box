@@ -90,7 +90,7 @@ Purpose
 CVAT Tools is a Windows desktop quality-assurance tool for CVAT annotations. It counts bounding boxes, detects duplicate boxes, and previews frame images.
 
 Network capability
-The app declares privateNetworkClientServer to connect to a CVAT server configured by the user on a private network or VPN. runFullTrust is required for the Electron Win32 application and Windows-protected local credential storage. The app makes outbound read requests and does not host a server.
+The app declares privateNetworkClientServer to connect to a CVAT server configured by the user on a private network or VPN. runFullTrust is required for the Electron Win32 application and Windows-protected local credential storage. The app makes outbound annotation and image requests and does not host a server. On desktop, targeted Shape deletion requests are sent only after explicit user confirmation, server revalidation, and backup.
 
 Credentials and privacy
 CVAT access is optional. This build includes a default read-only token for the organization's server; users can override it with their own token. The default token is an application resource. Manually entered tokens are stored locally using Windows data protection. Credentials are sent to the configured CVAT server for authentication. XML/ZIP annotations are processed locally. This Store build disables PostHog analytics.
