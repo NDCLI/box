@@ -6,6 +6,10 @@ export interface CVATAttribute {
 export interface CVATBox {
   id: string; // generated client-side id for UI reference
   label: string;
+  labelId?: number;
+  serverShapeId?: number;
+  annotationKind?: 'shape' | 'track';
+  serverPayload?: CvatShapePayload;
   xtl: number;
   ytl: number;
   xbr: number;
@@ -24,6 +28,26 @@ export interface CVATBox {
   globalIndex: number;
 }
 
+export interface CvatShapeAttribute {
+  spec_id: number;
+  value: string;
+}
+
+export interface CvatShapePayload {
+  id: number;
+  label_id: number;
+  frame: number;
+  type: string;
+  points: number[];
+  occluded?: boolean;
+  z_order?: number;
+  group?: number;
+  source?: string;
+  outside?: boolean;
+  keyframe?: boolean;
+  attributes?: CvatShapeAttribute[];
+}
+
 export interface CVATFrameData {
   id: string; // frame index or image id
   name: string; // image name or frame number
@@ -39,6 +63,12 @@ export interface CVATDataset {
   labelColors?: Record<string, string>;
   type: 'images' | 'tracks';
   frames: CVATFrameData[];
+  source?: 'zip' | 'xml' | 'cvat';
+  cvatContext?: {
+    serverUrl: string;
+    taskId: number;
+    jobId?: number;
+  };
 }
 
 export interface DuplicateGroup {
@@ -48,6 +78,8 @@ export interface DuplicateGroup {
   boxes: CVATBox[];
   overlapPercentage: number; // 100 for exact, or IoU * 100
 }
+
+export type DuplicateSelection = 'keep' | 'delete' | 'undecided';
 
 export interface DetectionSettings {
   matchLabelOnly: boolean;

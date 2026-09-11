@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { toCvatDataset } from '../cvatApi';
+import { describe, expect, it, vi } from 'vitest';
+import { deleteCvatJobShapes, toCvatDataset } from '../cvatApi';
+import type { CVATBox } from '../../types';
 
 describe('toCvatDataset', () => {
   it('converts CVAT rectangles into frame boxes and retains labels', () => {
@@ -54,5 +55,77 @@ describe('toCvatDataset', () => {
     expect(dataset.labels).toEqual(['helmet']);
     expect(dataset.frames[0]).toMatchObject({ width: 50, height: 60 });
     expect(dataset.frames[0].boxes[0].label).toBe('helmet');
+  });
+});
+
+describe('deleteCvatJobShapes', () => {
+  const shape = {
+    id: 99,
+    label_id: 7,
+    frame: 1,
+    type: 'rectangle',
+    points: [10, 20, 110, 220],
+    occluded: false,
+    z_order: 0,
+    attributes: [],
+  };
+  const box = (id: number): CVATBox => ({
+    id: String(id),
+    label: 'car',
+    labelId: 7,
+    serverShapeId: id,
+    annotationKind: 'shape',
+    serverPayload: { ...shape, id },
+    xtl: 10,
+    ytl: 20,
+    xbr: 110,
+    ybr: 220,
+    occluded: false,
+    attributes: [],
+    originalIndex: 0,
+    globalIndex: 1,
+  });
+
+  it('backs up, patches only selected shapes, and verifies deletion', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({ status: 200, data: { shapes: [shape] } })
+      .mockResolvedValueOnce({ status: 204, data: null })
+      .mockResolvedValueOnce({ status: 200, data: { shapes: [] } });
+    const saveBackup = vi.fn().mockResolvedValue({ path: 'C:/backup.json' });
+    window.cvatDesktop = { request, saveBackup, getStoredToken: vi.fn(), saveToken: vi.fn(), hasDefaultToken: vi.fn() };
+
+    const result = await deleteCvatJobShapes(
+      { mode: 'electron', serverUrl: 'http://cvat', token: 'secret' },
+      12,
+      101,
+      [box(99)],
+      [],
+    );
+
+    expect(saveBackup).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(request.mock.calls[1][0]).toMatchObject({ method: 'PATCH', resource: 'jobAnnotationsDelete', jobId: 101 });
+    expect(request.mock.calls[1][0].body).toEqual({
+      shapes: [{ ...shape, id: 99 }],
+      tracks: [],
+      tags: [],
+    });
+    expect(result.deletedShapeIds).toEqual([99]);
+  });
+
+  it('stops before backup and PATCH when the server shape changed', async () => {
+    const request = vi.fn().mockResolvedValue({ status: 200, data: { shapes: [{ ...shape, points: [11, 20, 110, 220] }] } });
+    const saveBackup = vi.fn();
+    window.cvatDesktop = { request, saveBackup, getStoredToken: vi.fn(), saveToken: vi.fn(), hasDefaultToken: vi.fn() };
+
+    await expect(deleteCvatJobShapes(
+      { mode: 'electron', serverUrl: 'http://cvat', token: 'secret' },
+      12,
+      101,
+      [box(99)],
+      [],
+    )).rejects.toThrow('đã thay đổi');
+    expect(saveBackup).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
   });
 });

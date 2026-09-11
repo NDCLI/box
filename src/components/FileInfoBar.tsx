@@ -18,6 +18,7 @@ interface FileInfoBarProps {
   onRefreshJob?: () => void;
   isRefreshingJob?: boolean;
   cvatScope?: 'Job' | 'Task';
+  onOpenBackupFolder?: () => void;
 }
 
 export default function FileInfoBar({
@@ -30,7 +31,8 @@ export default function FileInfoBar({
   onClose,
   onRefreshJob,
   isRefreshingJob = false,
-  cvatScope = 'Job'
+  cvatScope = 'Job',
+  onOpenBackupFolder,
 }: FileInfoBarProps) {
   return (
     <div className="app-panel app-file-bar bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -80,6 +82,16 @@ export default function FileInfoBar({
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingJob ? 'animate-spin' : ''}`} />
             {isRefreshingJob ? 'Đang tải lại…' : `Tải lại ${cvatScope}`}
+          </button>
+        )}
+
+        {onOpenBackupFolder && (
+          <button
+            type="button"
+            onClick={onOpenBackupFolder}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800"
+          >
+            Mở thư mục backup
           </button>
         )}
 

@@ -79,6 +79,7 @@ function cvatPath({ resource, taskId, jobId, frameId }) {
   const job = Number(jobId);
   if (resource === 'job' && Number.isInteger(job) && job > 0) return `/jobs/${job}`;
   if (resource === 'jobAnnotations' && Number.isInteger(job) && job > 0) return `/jobs/${job}/annotations`;
+  if (resource === 'jobAnnotationsDelete' && Number.isInteger(job) && job > 0) return `/jobs/${job}/annotations?action=delete`;
   if (resource === 'jobFrame' && Number.isInteger(job) && job > 0 && /^\d+$/.test(String(frameId))) return `/jobs/${job}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
   if (!Number.isInteger(id) || id < 1) throw new Error('Task ID không hợp lệ.');
   if (resource === 'task') return `/tasks/${id}`;
@@ -97,11 +98,22 @@ ipcMain.handle('cvat:request', async (_event, request) => {
   }
 
   const resource = request.resource;
+  const method = request.method || 'GET';
+  if (!['GET', 'PATCH'].includes(method)) throw new Error('Phương thức CVAT không được phép.');
+  if (method === 'PATCH' && resource !== 'jobAnnotationsDelete') {
+    throw new Error('Chỉ cho phép PATCH xóa Shape trong Job.');
+  }
+  if (method === 'GET' && resource === 'jobAnnotationsDelete') {
+    throw new Error('Endpoint xóa Shape chỉ nhận PATCH.');
+  }
   const response = await fetch(`${cvatApiBaseUrl(request.serverUrl)}${cvatPath(request)}`, {
+    method,
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: resource === 'frame' || resource === 'jobFrame' ? '*/*' : 'application/vnd.cvat+json, application/json',
+      ...(method === 'PATCH' ? { 'Content-Type': 'application/json' } : {}),
     },
+    ...(method === 'PATCH' ? { body: JSON.stringify(request.body ?? []) } : {}),
   });
 
   if (resource === 'frame' || resource === 'jobFrame') {
@@ -112,7 +124,32 @@ ipcMain.handle('cvat:request', async (_event, request) => {
     };
   }
 
-  return { status: response.status, data: await response.json() };
+  if (response.status === 204) return { status: response.status, data: null };
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  return { status: response.status, data };
+});
+
+ipcMain.handle('cvat:backup:save', async (_event, payload) => {
+  if (!payload || typeof payload !== 'object' || !Number.isInteger(payload.jobId)) {
+    throw new Error('Dữ liệu backup không hợp lệ.');
+  }
+  const backupDir = path.join(app.getPath('userData'), 'cvat-backups');
+  await fs.mkdir(backupDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  let serverSlug = 'server';
+  try { serverSlug = new URL(String(payload.serverUrl || '')).hostname.replace(/[^a-z0-9.-]/gi, '_') || serverSlug; } catch { /* keep fallback */ }
+  const backupPath = path.join(backupDir, `job-${payload.jobId}-${serverSlug}-${timestamp}.json`);
+  await fs.writeFile(backupPath, JSON.stringify(payload, null, 2), 'utf8');
+  return { path: backupPath };
+});
+
+ipcMain.handle('cvat:backup:open-folder', async () => {
+  const backupDir = path.join(app.getPath('userData'), 'cvat-backups');
+  await fs.mkdir(backupDir, { recursive: true });
+  const result = await shell.openPath(backupDir);
+  if (result) throw new Error(result);
 });
 
 function isExternalUrl(url) {

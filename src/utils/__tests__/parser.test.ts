@@ -413,6 +413,22 @@ describe('detectDuplicates', () => {
     expect(match).toHaveLength(1);
   });
 
+  it('can inspect duplicate boxes in a frame containing skip markers when enabled', () => {
+    const ds = makeDataset([
+      {
+        id: '2321',
+        boxes: [
+          { id: 'shape-a', label: 'bicycle', xtl: 10, ytl: 10, xbr: 100, ybr: 100 },
+          { id: 'shape-b', label: 'bicycle', xtl: 10, ytl: 10, xbr: 100, ybr: 100 },
+          { id: 'skip', label: '_skip', xtl: 0, ytl: 0, xbr: 1, ybr: 1 },
+        ],
+      },
+    ]);
+
+    expect(detectDuplicates(ds, defaultSettings)).toHaveLength(0);
+    expect(detectDuplicates(ds, defaultSettings, { skipFramesWithSkipLabel: false })).toHaveLength(1);
+  });
+
   it('handles multiple duplicate groups on same frame', () => {
     const ds = makeDataset([
       {

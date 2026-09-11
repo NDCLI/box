@@ -228,7 +228,8 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
     labels: labels.length > 0 ? labels : Array.from(new Set(frames.flatMap(f => f.boxes.map(b => b.label)))),
     type,
     labelColors,
-    frames
+    frames,
+    source: 'xml'
   };
 }
 
@@ -237,84 +238,61 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
  */
 export function detectDuplicates(
   dataset: CVATDataset,
-  settings: DetectionSettings
+  settings: DetectionSettings,
+  options: { skipFramesWithSkipLabel?: boolean } = {}
 ): DuplicateGroup[] {
   const duplicateGroups: DuplicateGroup[] = [];
-  let groupIdCounter = 0;
+  const skipFramesWithSkipLabel = options.skipFramesWithSkipLabel ?? true;
 
   dataset.frames.forEach(frame => {
     const { boxes } = frame;
-    if (boxes.some(box => box.label.toLowerCase().includes('skip'))) return;
+    if (skipFramesWithSkipLabel && boxes.some(box => box.label.toLowerCase().includes('skip'))) return;
     if (boxes.length < 2) return;
 
-    // Track which boxes have already been flagged as duplicates
-    const processedBoxIds = new Set<string>();
+    const isDuplicate = (boxA: CVATBox, boxB: CVATBox): boolean => {
+      if (settings.matchLabelOnly && boxA.label !== boxB.label) return false;
+      if (settings.useIoU) return calculateIoU(boxA, boxB) * 100 >= settings.overlapThreshold;
+      return Math.abs(boxA.xtl - boxB.xtl) <= settings.tolerancePx &&
+        Math.abs(boxA.ytl - boxB.ytl) <= settings.tolerancePx &&
+        Math.abs(boxA.xbr - boxB.xbr) <= settings.tolerancePx &&
+        Math.abs(boxA.ybr - boxB.ybr) <= settings.tolerancePx;
+    };
 
-    for (let i = 0; i < boxes.length; i++) {
-      const boxA = boxes[i];
-      if (processedBoxIds.has(boxA.id)) continue;
-
-      const groupBoxes: CVATBox[] = [boxA];
-
-      for (let j = i + 1; j < boxes.length; j++) {
-        const boxB = boxes[j];
-        if (processedBoxIds.has(boxB.id)) continue;
-
-        // Label matching check
-        if (settings.matchLabelOnly && boxA.label !== boxB.label) {
-          continue;
-        }
-
-        let isDuplicate = false;
-        let overlapPercent = 0;
-
-        if (settings.useIoU) {
-          const iou = calculateIoU(boxA, boxB);
-          overlapPercent = Math.round(iou * 10000) / 100; // 2 decimal places percentage
-          if (overlapPercent >= settings.overlapThreshold) {
-            isDuplicate = true;
+    const visited = new Set<string>();
+    boxes.forEach((startBox, startIndex) => {
+      if (visited.has(startBox.id)) return;
+      const component: CVATBox[] = [];
+      const queue = [startIndex];
+      visited.add(startBox.id);
+      while (queue.length > 0) {
+        const currentIndex = queue.shift()!;
+        const current = boxes[currentIndex];
+        component.push(current);
+        boxes.forEach((candidate, candidateIndex) => {
+          if (!visited.has(candidate.id) && isDuplicate(current, candidate)) {
+            visited.add(candidate.id);
+            queue.push(candidateIndex);
           }
-        } else {
-          // Coordinate tolerance check
-          const xtlDiff = Math.abs(boxA.xtl - boxB.xtl);
-          const ytlDiff = Math.abs(boxA.ytl - boxB.ytl);
-          const xbrDiff = Math.abs(boxA.xbr - boxB.xbr);
-          const ybrDiff = Math.abs(boxA.ybr - boxB.ybr);
-
-          if (
-            xtlDiff <= settings.tolerancePx &&
-            ytlDiff <= settings.tolerancePx &&
-            xbrDiff <= settings.tolerancePx &&
-            ybrDiff <= settings.tolerancePx
-          ) {
-            isDuplicate = true;
-            // For coordinate tolerance, if exact, overlap is 100%
-            overlapPercent = calculateIoU(boxA, boxB) * 100;
-          }
-        }
-
-        if (isDuplicate) {
-          groupBoxes.push(boxB);
-          processedBoxIds.add(boxB.id);
-        }
-      }
-
-      // If we found duplicates for boxA, create a group
-      if (groupBoxes.length > 1) {
-        processedBoxIds.add(boxA.id);
-        const avgOverlap = groupBoxes.length === 2
-          ? calculateIoU(groupBoxes[0], groupBoxes[1]) * 100
-          : groupBoxes.slice(1).reduce((acc, box) => acc + calculateIoU(groupBoxes[0], box) * 100, 0) / (groupBoxes.length - 1);
-
-        duplicateGroups.push({
-          id: `group-${groupIdCounter++}`,
-          frameId: frame.id,
-          frameName: frame.name,
-          boxes: groupBoxes,
-          overlapPercentage: Math.round(avgOverlap * 100) / 100
         });
       }
-    }
+      if (component.length < 2) return;
+      let overlapSum = 0;
+      let overlapCount = 0;
+      for (let i = 0; i < component.length; i++) {
+        for (let j = i + 1; j < component.length; j++) {
+          overlapSum += calculateIoU(component[i], component[j]) * 100;
+          overlapCount++;
+        }
+      }
+      const stableKey = component.map(box => box.id).sort().join('|');
+      duplicateGroups.push({
+        id: `group-${frame.id}-${stableKey}`,
+        frameId: frame.id,
+        frameName: frame.name,
+        boxes: component,
+        overlapPercentage: Math.round((overlapSum / Math.max(1, overlapCount)) * 100) / 100,
+      });
+    });
   });
 
   return duplicateGroups;

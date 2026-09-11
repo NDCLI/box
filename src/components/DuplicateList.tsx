@@ -2,10 +2,18 @@ import {
   FileCheck,
   Search,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Trash2,
+  Check,
+  Square,
+  Eye
 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { type CVATDataset, type DuplicateGroup, type DetectionSettings } from '../types';
+import { type CVATDataset, type CVATFrameData, type DuplicateGroup, type DetectionSettings, type DuplicateSelection } from '../types';
+import { getLabelColor } from '../constants/colors';
+
+type QuickViewBox = { x: number; y: number; width: number; height: number };
 
 interface DuplicateListProps {
   dataset: CVATDataset;
@@ -20,11 +28,24 @@ interface DuplicateListProps {
   onSelectAllLabels: () => void;
   selectedGroupId: string | null;
   onSelectGroup: (groupId: string) => void;
+  selectedGroupIds: string[];
+  onToggleGroup: (groupId: string) => void;
+  selectionByBoxId: Record<string, DuplicateSelection>;
+  onBoxSelection: (boxId: string, selection: DuplicateSelection) => void;
+  onDeleteSelected: () => void;
+  canDelete: boolean;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
   itemsPerPage: number;
   settings: DetectionSettings;
+  quickReviewGroup: DuplicateGroup | null;
+  quickReviewFrameData: CVATFrameData | null;
+  quickReviewImageSrc: string | null;
+  quickReviewImageLoading: boolean;
+  quickReviewImageError: string | null;
+  quickReviewImageDimensions: { width: number; height: number } | null;
+  onOpenPreview: () => void;
 }
 
 export default function DuplicateList({
@@ -40,12 +61,93 @@ export default function DuplicateList({
   onSelectAllLabels,
   selectedGroupId,
   onSelectGroup,
+  selectedGroupIds,
+  onToggleGroup,
+  selectionByBoxId,
+  onBoxSelection,
+  onDeleteSelected,
+  canDelete,
   currentPage,
   totalPages,
   onPageChange,
   itemsPerPage,
-  settings
+  settings,
+  quickReviewGroup,
+  quickReviewFrameData,
+  quickReviewImageSrc,
+  quickReviewImageLoading,
+  quickReviewImageError,
+  quickReviewImageDimensions,
+  onOpenPreview
 }: DuplicateListProps) {
+  const [quickViewBox, setQuickViewBox] = useState<QuickViewBox | null>(null);
+  const quickReviewRef = useRef<HTMLDivElement | null>(null);
+
+  const deleteBoxCount = new Set(
+    duplicateGroups.flatMap(group => group.boxes)
+      .filter(box => selectionByBoxId[box.id] === 'delete')
+      .map(box => box.id)
+  ).size;
+
+  const quickReviewSourceWidth = quickReviewImageDimensions?.width || quickReviewFrameData?.width || 1;
+  const quickReviewSourceHeight = quickReviewImageDimensions?.height || quickReviewFrameData?.height || 1;
+  const quickReviewBounds = quickReviewGroup && quickReviewFrameData ? (() => {
+    const minX = Math.min(...quickReviewGroup.boxes.map(box => box.xtl));
+    const minY = Math.min(...quickReviewGroup.boxes.map(box => box.ytl));
+    const maxX = Math.max(...quickReviewGroup.boxes.map(box => box.xbr));
+    const maxY = Math.max(...quickReviewGroup.boxes.map(box => box.ybr));
+    const boxSize = Math.max(maxX - minX, maxY - minY);
+    const padding = Math.max(18, Math.min(100, boxSize * 0.3));
+    const x = Math.max(0, minX - padding);
+    const y = Math.max(0, minY - padding);
+    const right = Math.min(quickReviewSourceWidth, maxX + padding);
+    const bottom = Math.min(quickReviewSourceHeight, maxY + padding);
+    return { x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) };
+  })() : null;
+
+  useEffect(() => {
+    setQuickViewBox(null);
+  }, [quickReviewGroup?.id, quickReviewSourceWidth, quickReviewSourceHeight]);
+
+  const activeQuickViewBox = quickViewBox ?? quickReviewBounds;
+  const quickOverlayScale = quickReviewBounds && activeQuickViewBox
+    ? Math.max(0.1, activeQuickViewBox.width / quickReviewBounds.width)
+    : 1;
+
+  const handleQuickReviewWheel = (event: WheelEvent) => {
+    if (!quickReviewBounds) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const current = activeQuickViewBox ?? quickReviewBounds;
+    const rect = quickReviewRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pointerX = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const pointerY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const zoomFactor = event.deltaY < 0 ? 0.8 : 1.25;
+    const minWidth = quickReviewBounds.width / 8;
+    const minHeight = quickReviewBounds.height / 8;
+    const nextWidth = Math.min(quickReviewBounds.width, Math.max(minWidth, current.width * zoomFactor));
+    const nextHeight = Math.min(quickReviewBounds.height, Math.max(minHeight, current.height * zoomFactor));
+    const focusX = current.x + current.width * pointerX;
+    const focusY = current.y + current.height * pointerY;
+    const nextX = Math.min(
+      quickReviewBounds.x + quickReviewBounds.width - nextWidth,
+      Math.max(quickReviewBounds.x, focusX - nextWidth * pointerX),
+    );
+    const nextY = Math.min(
+      quickReviewBounds.y + quickReviewBounds.height - nextHeight,
+      Math.max(quickReviewBounds.y, focusY - nextHeight * pointerY),
+    );
+    setQuickViewBox({ x: nextX, y: nextY, width: nextWidth, height: nextHeight });
+  };
+
+  useEffect(() => {
+    const element = quickReviewRef.current;
+    if (!element || !quickReviewBounds) return;
+    element.addEventListener('wheel', handleQuickReviewWheel, { passive: false });
+    return () => element.removeEventListener('wheel', handleQuickReviewWheel);
+  }, [quickReviewBounds, activeQuickViewBox]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
 
@@ -63,6 +165,17 @@ export default function DuplicateList({
                 </span>
               )}
             </h3>
+            {canDelete && (
+              <button
+                type="button"
+                onClick={onDeleteSelected}
+                disabled={deleteBoxCount === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Xóa box đã chọn ({deleteBoxCount})
+              </button>
+            )}
           </div>
 
           {/* Search box */}
@@ -143,6 +256,16 @@ export default function DuplicateList({
                     <div className="min-w-0 pr-3">
                       {/* Tiêu đề chính: Frame ID to rõ */}
                       <div className="flex items-center space-x-2">
+                        {canDelete && (
+                          <button
+                            type="button"
+                            aria-label={`Chọn nhóm Frame ${group.frameId}`}
+                            onClick={(event) => { event.stopPropagation(); onToggleGroup(group.id); }}
+                            className="text-slate-500 hover:text-red-600"
+                          >
+                            {selectedGroupIds.includes(group.id) ? <Check className="h-4 w-4 text-red-600" /> : <Square className="h-4 w-4" />}
+                          </button>
+                        )}
                         <span className="text-[11px] font-bold text-slate-400 font-mono">
                           #{absoluteIndex}
                         </span>
@@ -167,6 +290,97 @@ export default function DuplicateList({
                         </span>
                       </div>
 
+                      {quickReviewGroup?.id === group.id && quickReviewFrameData && (
+                        <div className="mt-3 overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
+                          {canDelete && (
+                            <div className="flex flex-wrap items-center gap-1 border-b border-slate-700 px-2 py-1.5 text-[10px] text-slate-300">
+                              <span className="mr-1 text-slate-400">Chọn box xóa:</span>
+                              {group.boxes.map((box, boxIndex) => {
+                                const markedDelete = selectionByBoxId[box.id] === 'delete';
+                                const letter = String.fromCharCode(65 + boxIndex);
+                                return (
+                                  <button
+                                    key={box.id}
+                                    type="button"
+                                    disabled={box.annotationKind === 'track'}
+                                    aria-pressed={markedDelete}
+                                    title={markedDelete ? `Box ${letter}: bỏ đánh dấu xóa` : `Box ${letter}: đánh dấu xóa`}
+                                    onClick={(event) => { event.stopPropagation(); onBoxSelection(box.id, markedDelete ? 'keep' : 'delete'); }}
+                                    className={`min-w-6 rounded px-1.5 py-0.5 font-black disabled:opacity-40 ${markedDelete ? 'bg-red-500 text-white' : 'bg-emerald-700 text-white hover:bg-red-500'}`}
+                                  >
+                                    {letter}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div ref={quickReviewRef} className="relative h-64 w-full select-none" title="Cuộn chuột để zoom vào cạnh box">
+                            {quickReviewImageSrc && activeQuickViewBox ? (
+                              <svg
+                                viewBox={`${activeQuickViewBox.x} ${activeQuickViewBox.y} ${activeQuickViewBox.width} ${activeQuickViewBox.height}`}
+                                preserveAspectRatio="none"
+                                className="absolute inset-0 h-full w-full"
+                              >
+                                <image href={quickReviewImageSrc} x="0" y="0" width={quickReviewSourceWidth} height={quickReviewSourceHeight} preserveAspectRatio="none" />
+                                {group.boxes.map((box, boxIndex) => {
+                                  const markedDelete = selectionByBoxId[box.id] === 'delete';
+                                  const color = markedDelete ? '#ef4444' : getLabelColor(box.label, dataset);
+                                  const badgeRadius = Math.max(1.5, 4 * quickOverlayScale);
+                                  const badgeOffset = boxIndex * badgeRadius * 2.4;
+                                  return (
+                                    <g
+                                      key={box.id}
+                                      className="cursor-pointer"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (canDelete && box.annotationKind !== 'track') {
+                                          onBoxSelection(box.id, markedDelete ? 'keep' : 'delete');
+                                        }
+                                      }}
+                                    >
+                                      <rect
+                                        x={box.xtl}
+                                        y={box.ytl}
+                                        width={Math.max(0, box.xbr - box.xtl)}
+                                        height={Math.max(0, box.ybr - box.ytl)}
+                                        fill={markedDelete ? '#ef444433' : '#10b98122'}
+                                        stroke={color}
+                                        strokeWidth="4"
+                                        strokeDasharray={markedDelete ? '10,7' : undefined}
+                                        vectorEffect="non-scaling-stroke"
+                                      />
+                                      <g pointerEvents="none">
+                                        <circle cx={box.xtl + badgeRadius + badgeOffset} cy={box.ytl + badgeRadius} r={badgeRadius} fill={color} />
+                                        <text x={box.xtl + badgeRadius + badgeOffset} y={box.ytl + badgeRadius * 1.4} fill="#ffffff" fontSize={Math.max(2, badgeRadius * 1.4)} fontWeight="700" textAnchor="middle">
+                                          {String.fromCharCode(65 + boxIndex)}
+                                        </text>
+                                      </g>
+                                    </g>
+                                  );
+                                })}
+                              </svg>
+                            ) : (
+                              <div className="absolute inset-0 grid place-items-center px-3 text-center text-[10px] text-slate-400">
+                                {quickReviewImageLoading ? 'Đang tải ảnh frame…' : (quickReviewImageError || 'Không có ảnh, chỉ hiển thị khung tọa độ')}
+                              </div>
+                            )}
+                          </div>
+                          <div className="border-t border-slate-700 text-[10px] text-slate-300">
+                            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                              <span>Cuộn để zoom cạnh box · Chưa chọn = giữ · Đỏ = xóa</span>
+                              <div className="flex items-center gap-1">
+                                {quickViewBox && (
+                                  <button type="button" onClick={(event) => { event.stopPropagation(); setQuickViewBox(null); }} className="rounded bg-slate-700 px-2 py-1 font-bold text-white hover:bg-slate-600">Đặt lại</button>
+                                )}
+                                <button type="button" onClick={(event) => { event.stopPropagation(); onOpenPreview(); }} className="inline-flex items-center gap-1 rounded bg-slate-700 px-2 py-1 font-bold text-white hover:bg-slate-600">
+                                  <Eye className="h-3 w-3" /> Mở kiểm tra chi tiết
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Chi tiết toạ độ box */}
                       <div className="mt-1.5 space-y-0.5">
                         {group.boxes.some(b => b.trackId) && (
@@ -175,17 +389,19 @@ export default function DuplicateList({
                           </span>
                         )}
                         <div className="text-[10px] text-slate-500 font-mono leading-relaxed">
-                          {group.boxes.slice(0, 2).map((box, _bIdx) => (
-                            <span key={box.id} className="block truncate">
+                          {group.boxes.map((box, _bIdx) => (
+                            <span key={box.id} className="mb-1 block truncate">
                               <span className="text-slate-600 font-bold mr-1">
                                 #{box.globalIndex}
                               </span>
                               {box.label}: [{box.xtl.toFixed(1)}, {box.ytl.toFixed(1)}, {box.xbr.toFixed(1)}, {box.ybr.toFixed(1)}]
+                              {canDelete && (
+                                <span className="ml-1 inline-flex gap-1 font-sans">
+                                  <button type="button" disabled={box.annotationKind === 'track'} onClick={(event) => { event.stopPropagation(); onBoxSelection(box.id, selectionByBoxId[box.id] === 'delete' ? 'keep' : 'delete'); }} className={`rounded px-1 ${selectionByBoxId[box.id] === 'delete' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'} disabled:opacity-40`}>{selectionByBoxId[box.id] === 'delete' ? 'Bỏ xóa' : 'Xóa'}</button>
+                                </span>
+                              )}
                             </span>
                           ))}
-                          {group.boxes.length > 2 && (
-                            <span className="text-slate-400 font-semibold">...+{group.boxes.length - 2} box khác</span>
-                          )}
                         </div>
                       </div>
                     </div>

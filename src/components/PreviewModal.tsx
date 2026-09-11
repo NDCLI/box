@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Layers,
   X,
@@ -7,7 +7,7 @@ import {
   Loader2
 } from 'lucide-react';
 import CustomZoomPanPinch, { type ZoomControls, type ZoomState } from './CustomZoomPanPinch';
-import { type CVATDataset, type CVATFrameData, type DuplicateGroup } from '../types';
+import { type CVATDataset, type CVATFrameData, type DuplicateGroup, type DuplicateSelection } from '../types';
 import { getLabelColor } from '../constants/colors';
 
 interface PreviewModalProps {
@@ -21,6 +21,10 @@ interface PreviewModalProps {
   imageDimensions: { width: number; height: number } | null;
   customZoomPadding: number;
   onCustomZoomPaddingChange: (value: number) => void;
+  selectionByBoxId: Record<string, DuplicateSelection>;
+  onBoxSelection: (boxId: string, selection: DuplicateSelection) => void;
+  canDelete: boolean;
+  onDelete: () => void;
   onClose: () => void;
 }
 
@@ -35,9 +39,14 @@ export default function PreviewModal({
   imageDimensions,
   customZoomPadding,
   onCustomZoomPaddingChange,
+  selectionByBoxId,
+  onBoxSelection,
+  canDelete,
+  onDelete,
   onClose
 }: PreviewModalProps) {
   const transformComponentRef = useRef<ZoomControls | null>(null);
+  const [hiddenBoxIds, setHiddenBoxIds] = useState<string[]>([]);
   const imageWidth = imageDimensions?.width ?? selectedFrameData.width;
   const imageHeight = imageDimensions?.height ?? selectedFrameData.height;
 
@@ -54,9 +63,11 @@ export default function PreviewModal({
   );
 
   const duplicateBoxes = useMemo(
-    () => selectedFrameData.boxes.filter(box => frameDuplicateBoxIds.has(box.id)),
-    [selectedFrameData.boxes, frameDuplicateBoxIds]
+    () => selectedFrameData.boxes.filter(box => frameDuplicateBoxIds.has(box.id) && !hiddenBoxIds.includes(box.id)),
+    [selectedFrameData.boxes, frameDuplicateBoxIds, hiddenBoxIds]
   );
+
+  const groupDeleteCount = selectedGroup.boxes.filter(box => selectionByBoxId[box.id] === 'delete').length;
 
   const selectedGroupBounds = useMemo(() => {
     if (selectedGroup.boxes.length === 0) return null;
@@ -143,6 +154,11 @@ export default function PreviewModal({
                     </div>
                   </div>
                 )}
+                {canDelete && (
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={onDelete} disabled={groupDeleteCount === 0} className="rounded-lg bg-red-600 px-2.5 py-1.5 text-[11px] font-bold text-white disabled:opacity-40">Xóa box đã chọn ({groupDeleteCount})</button>
+                  </div>
+                )}
                 <button
                   onClick={onClose}
                   className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"
@@ -171,6 +187,23 @@ export default function PreviewModal({
                       <span className="text-slate-500 font-sans">Chỉ có file XML (Vẽ mô phỏng)</span>
                     )}
                   </div>
+
+                  {canDelete && (
+                    <div className="absolute right-5 top-12 z-10 max-w-[min(26rem,calc(100%-2.5rem))] rounded-xl border border-slate-700 bg-slate-900/95 p-2 text-[10px] text-slate-200 shadow-xl">
+                      <div className="mb-1 font-bold text-slate-300">Mặc định giữ; chỉ chọn box cần xóa</div>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedGroup.boxes.map((box, index) => {
+                          const status = selectionByBoxId[box.id] === 'delete' ? 'delete' : 'keep';
+                          return (
+                            <div key={box.id} className="flex items-center gap-1 rounded border border-slate-700 px-1.5 py-1">
+                              <button type="button" disabled={box.annotationKind === 'track'} onClick={() => onBoxSelection(box.id, status === 'delete' ? 'keep' : 'delete')} className={`font-bold ${status === 'delete' ? 'text-red-300' : 'text-emerald-300'} disabled:opacity-40`}>{String.fromCharCode(65 + index)} {status === 'delete' ? 'Bỏ xóa' : 'Xóa'}</button>
+                              <button type="button" onClick={() => setHiddenBoxIds(ids => ids.includes(box.id) ? ids.filter(id => id !== box.id) : [...ids, box.id])} className="text-slate-400">{hiddenBoxIds.includes(box.id) ? 'Hiện' : 'Ẩn'}</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Responsive SVG Container */}
                   <div className="flex-1 w-full flex items-center justify-center relative overflow-hidden">
@@ -268,8 +301,9 @@ export default function PreviewModal({
                         {/* DRAW ALL DUPLICATE BOX GROUPS in this frame (High contrast highlighted) */}
                         {duplicateBoxes.map((box, idx) => {
                           const isFirst = idx % 2 === 0;
+                          const status = selectionByBoxId[box.id] === 'delete' ? 'delete' : 'keep';
 
-                          // Highlight duplicate group only; app no longer marks keep/delete boxes.
+                          // Keep/delete state is shown directly on the annotation.
                           const color = getLabelColor(box.label, dataset);
                           const strokeWidth = dynamicHighlightStrokeWidth;
 
@@ -277,6 +311,7 @@ export default function PreviewModal({
                             <g
                               key={box.id}
                               className="cursor-pointer transition-all"
+                              onClick={() => canDelete && box.annotationKind !== 'track' && onBoxSelection(box.id, status === 'delete' ? 'keep' : 'delete')}
                             >
                               {/* Bounding box rect */}
                               <rect
@@ -284,8 +319,9 @@ export default function PreviewModal({
                                 y={box.ytl}
                                 width={box.xbr - box.xtl}
                                 height={box.ybr - box.ytl}
-                                fill={color + "1a"}
-                                stroke={color}
+                                fill={status === 'delete' ? '#ef444433' : status === 'keep' ? '#10b98133' : color + "1a"}
+                                stroke={status === 'delete' ? '#ef4444' : status === 'keep' ? '#10b981' : color}
+                                strokeDasharray={status === 'delete' ? '8,5' : undefined}
                                 strokeWidth={strokeWidth}
                                 vectorEffect="non-scaling-stroke"
                                 style={{ transition: 'stroke-width 0.15s ease' }}

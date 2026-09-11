@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   FileArchive,
   FileCode,
@@ -6,6 +6,7 @@ import {
   ScanSearch,
   ShieldCheck,
   Zap,
+  Server,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { CVATDataset } from '../types';
@@ -39,6 +40,9 @@ export default function UploadZone({
   onDrop,
   onCvatDatasetLoaded,
 }: UploadZoneProps) {
+  const [source, setSource] = useState<'cvat' | 'zip'>('cvat');
+  const sources = [{ id: 'cvat', label: 'CVAT Online', icon: Server }, { id: 'zip', label: 'Offline', icon: FileArchive }] as const;
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 15 }}
@@ -50,12 +54,42 @@ export default function UploadZone({
         <span className="app-eyebrow">CVAT ANNOTATION QA</span>
         <h1 id="upload-title">Cvat Tools</h1>
         <p>
-          Mở file annotation để kiểm tra box trùng, rà soát nhãn và xem nhanh thống kê dữ liệu.
+          Chọn nguồn dữ liệu để kiểm tra box trùng, rà soát nhãn và xem thống kê.
         </p>
       </div>
 
       <div className="app-upload-stage">
-        <CvatConnectPanel onDatasetLoaded={onCvatDatasetLoaded} />
+        <div role="tablist" aria-label="Nguồn dữ liệu" className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-slate-700 bg-slate-900 p-1.5">
+          {sources.map(({ id, label, icon: Icon }, index) => (
+            <button
+              key={id}
+              id={`source-tab-${id}`}
+              type="button"
+              role="tab"
+              aria-selected={source === id}
+              aria-controls={`source-panel-${id}`}
+              tabIndex={source === id ? 0 : -1}
+              onClick={() => { setSource(id); onDragLeave(); }}
+              onKeyDown={(event) => {
+                const next = event.key === 'Home' ? sources[0] : event.key === 'End' ? sources[1]
+                  : event.key === 'ArrowLeft' || event.key === 'ArrowRight' ? sources[1 - index] : null;
+                if (!next) return;
+                event.preventDefault();
+                setSource(next.id);
+                onDragLeave();
+                document.getElementById(`source-tab-${next.id}`)?.focus();
+              }}
+              className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold transition-colors ${source === id ? 'bg-cyan-300 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />{label}
+            </button>
+          ))}
+        </div>
+        <div id="source-panel-cvat" role="tabpanel" aria-labelledby="source-tab-cvat" hidden={source !== 'cvat'}>
+          <CvatConnectPanel onDatasetLoaded={onCvatDatasetLoaded} />
+        </div>
+
+        <div id="source-panel-zip" role="tabpanel" aria-labelledby="source-tab-zip" hidden={source !== 'zip'}>
 
         <input
           type="file"
@@ -90,9 +124,11 @@ export default function UploadZone({
         <p className="app-upload-security">
           <ShieldCheck aria-hidden="true" /> File được phân tích ngay trên trình duyệt, không rời khỏi thiết bị.
         </p>
+        </div>
 
       </div>
 
+      <div hidden={source !== 'zip'}>
       <div className="app-benefits" aria-label="Tính năng chính">
         {benefits.map(({ icon: Icon, label }) => (
           <div className="app-benefit" key={label}>
@@ -100,6 +136,7 @@ export default function UploadZone({
             <span>{label}</span>
           </div>
         ))}
+      </div>
       </div>
     </motion.section>
   );

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useCallback, useRef, useEffect } from 'react';
 
 // Hooks
 import { useFileProcessor } from './hooks/useFileProcessor';
@@ -19,7 +19,8 @@ const PreviewModal = lazy(() => import('./components/PreviewModal'));
 
 // Utils
 import { removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
-import { loadCvatJobDataset, loadCvatTaskDataset } from './utils/cvatApi';
+import { deleteCvatJobShapes, loadCvatJobDataset, loadCvatTaskDataset } from './utils/cvatApi';
+import type { DuplicateGroup } from './types';
 
 export default function App() {
   // ── Exclude labels (persisted to localStorage) ──
@@ -41,8 +42,10 @@ export default function App() {
   // ── Manual images mapping ──
   const [manualImages, setManualImages] = useState<Record<string, string>>({});
   const [cvatFrameSource, setCvatFrameSource] = useState<CvatFrameSource | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isRefreshingJob, setIsRefreshingJob] = useState(false);
   const refreshRequest = useRef(0);
+  const restorePreviewFrameRef = useRef<string | null>(null);
 
   // ── Visualizer settings ──
   const [customZoomPadding, setCustomZoomPadding] = useState<number>(60);
@@ -51,7 +54,7 @@ export default function App() {
   const fp = useFileProcessor({
     onDatasetParsed: (parsed) => {
       detection.setSelectedLabels(parsed.labels);
-      detection.setSelectedGroupId(null);
+      if (!restorePreviewFrameRef.current) detection.setSelectedGroupId(null);
       detection.setCurrentPage(1);
     },
   });
@@ -71,18 +74,84 @@ export default function App() {
     cvatFrameSource,
   });
 
+  useEffect(() => {
+    const frameId = restorePreviewFrameRef.current;
+    if (!frameId || !fp.dataset) return;
+    const group = detection.duplicateGroups.find(candidate => candidate.frameId === frameId);
+    if (group) {
+      detection.setSelectedGroupId(group.id);
+      restorePreviewFrameRef.current = null;
+    }
+  }, [detection.duplicateGroups, fp.dataset]);
+
+  const isDesktopJob = Boolean(cvatFrameSource?.jobId && fp.dataset?.source === 'cvat' && fp.dataset.cvatContext?.jobId);
+
+  const handleDeleteGroups = useCallback(async (groups: DuplicateGroup[], source: 'list' | 'preview' = 'list') => {
+    if (!isDesktopJob || !cvatFrameSource?.jobId || !fp.dataset?.cvatContext) {
+      fp.setError('Xóa box chỉ dùng được khi mở một Job CVAT trên bản desktop.');
+      return;
+    }
+    const deleteBoxes = groups.flatMap(group => group.boxes.filter(box => detection.selectionByBoxId[box.id] === 'delete'));
+    // An unselected box is kept by default. Only explicitly marked boxes are deleted.
+    const keepBoxes = groups.flatMap(group => group.boxes.filter(box => detection.selectionByBoxId[box.id] !== 'delete'));
+    for (const group of groups) {
+      const groupDelete = group.boxes.filter(box => detection.selectionByBoxId[box.id] === 'delete');
+      if (groupDelete.length === group.boxes.length) {
+        fp.setError(`Không thể xóa hết box trong nhóm Frame ${group.frameId}.`);
+        return;
+      }
+      if (group.boxes.some(box => box.annotationKind === 'track') && groupDelete.length > 0) {
+        fp.setError(`Nhóm Frame ${group.frameId} có Track; tính năng xóa Track chưa được hỗ trợ.`);
+        return;
+      }
+    }
+    const uniqueDelete = [...new Map(deleteBoxes.filter(box => Number.isInteger(box.serverShapeId)).map(box => [box.serverShapeId!, box])).values()];
+    const uniqueKeep = [...new Map(keepBoxes.filter(box => Number.isInteger(box.serverShapeId)).map(box => [box.serverShapeId!, box])).values()];
+    if (uniqueDelete.length === 0) {
+      fp.setError('Hãy chọn box sẽ xóa trước.');
+      return;
+    }
+    const frames = [...new Set(groups.map(group => group.frameId))].sort((a, b) => Number(a) - Number(b));
+    const message = `Job #${cvatFrameSource.jobId}\nFrame: ${frames.join(', ')}\nSẽ xóa ${uniqueDelete.length} Shape.\n\nTiếp tục?`;
+    if (!window.confirm(message)) return;
+    fp.setError(null);
+    fp.setSuccessMsg(null);
+    try {
+      const result = await deleteCvatJobShapes(
+        cvatFrameSource.connection,
+        cvatFrameSource.taskId,
+        cvatFrameSource.jobId,
+        uniqueDelete,
+        uniqueKeep,
+      );
+      restorePreviewFrameRef.current = detection.selectedFrameData?.id ?? null;
+      try {
+        const refreshed = await loadCvatJobDataset(cvatFrameSource.connection, cvatFrameSource.taskId, cvatFrameSource.jobId);
+        fp.loadDataset(refreshed);
+        fp.setSuccessMsg(`Đã xác minh xóa ${result.deletedShapeIds.length} Shape trên CVAT. Bản sao đã lưu tại ${result.backupPath}${source === 'preview' ? ' (nhóm đang xem).' : '.'}`);
+      } catch (refreshError) {
+        restorePreviewFrameRef.current = null;
+        fp.setError(`Đã xác minh xóa ${result.deletedShapeIds.length} Shape trên CVAT nhưng chưa tải lại được giao diện: ${refreshError instanceof Error ? refreshError.message : 'lỗi mạng'}. Hãy bấm Tải lại Job.`);
+      }
+    } catch (err) {
+      fp.setError(err instanceof Error ? err.message : 'Không thể xóa Shape trên CVAT.');
+    }
+  }, [cvatFrameSource, detection.selectionByBoxId, fp, isDesktopJob]);
+
   // ── Extended reset (clean up manual images too) ──
   const handleReset = useCallback(() => {
     refreshRequest.current++;
     setIsRefreshingJob(false);
     fp.resetState();
     setCvatFrameSource(null);
+    setIsPreviewOpen(false);
     setManualImages((prev) => {
       Object.values(prev).forEach((url) => {
         if (url) URL.revokeObjectURL(url);
       });
       return {};
     });
+    restorePreviewFrameRef.current = null;
   }, [fp]);
 
   const handleRefreshJob = async () => {
@@ -216,6 +285,7 @@ export default function App() {
               onRefreshJob={cvatFrameSource ? handleRefreshJob : undefined}
               cvatScope={cvatFrameSource?.jobId ? 'Job' : 'Task'}
               isRefreshingJob={isRefreshingJob}
+              onOpenBackupFolder={isDesktopJob ? () => void window.cvatDesktop?.openBackupFolder?.() : undefined}
             />
 
             <ConfigPanel
@@ -246,19 +316,35 @@ export default function App() {
               onLabelToggle={handleLabelToggle}
               onSelectAllLabels={handleSelectAllLabels}
               selectedGroupId={detection.selectedGroupId}
-              onSelectGroup={(id) => detection.setSelectedGroupId(id)}
+              onSelectGroup={(id) => { setIsPreviewOpen(false); detection.setSelectedGroupId(id); }}
+              selectedGroupIds={detection.selectedGroupIds}
+              onToggleGroup={(id) => detection.setSelectedGroupIds(ids => ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id])}
+              selectionByBoxId={detection.selectionByBoxId}
+              onBoxSelection={detection.setBoxSelection}
+              onDeleteSelected={() => void handleDeleteGroups(detection.duplicateGroups.filter(group =>
+                detection.selectedGroupIds.includes(group.id) ||
+                group.boxes.some(box => detection.selectionByBoxId[box.id] === 'delete')
+              ))}
+              canDelete={isDesktopJob}
               currentPage={detection.currentPage}
               totalPages={detection.totalPages}
               onPageChange={(p) => detection.setCurrentPage(p)}
               itemsPerPage={detection.itemsPerPage}
               settings={detection.settings}
+              quickReviewGroup={detection.selectedGroup}
+              quickReviewFrameData={detection.selectedFrameData}
+              quickReviewImageSrc={frameImage.currentImageSrc}
+              quickReviewImageLoading={frameImage.imageLoading}
+              quickReviewImageError={frameImage.imageError}
+              quickReviewImageDimensions={frameImage.imageDimensions}
+              onOpenPreview={() => setIsPreviewOpen(true)}
             />
           </div>
         )}
       </main>
 
       {/* Preview Modal */}
-      {detection.selectedGroup && detection.selectedFrameData && (
+      {isPreviewOpen && detection.selectedGroup && detection.selectedFrameData && (
         <Suspense fallback={
           <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/80 text-sm font-semibold text-slate-200">
             Đang mở trình xem ảnh…
@@ -275,7 +361,11 @@ export default function App() {
             imageDimensions={frameImage.imageDimensions}
             customZoomPadding={customZoomPadding}
             onCustomZoomPaddingChange={setCustomZoomPadding}
-            onClose={() => detection.setSelectedGroupId(null)}
+            selectionByBoxId={detection.selectionByBoxId}
+            onBoxSelection={detection.setBoxSelection}
+            canDelete={isDesktopJob}
+            onDelete={() => void handleDeleteGroups([detection.selectedGroup!], 'preview')}
+            onClose={() => { setIsPreviewOpen(false); detection.setSelectedGroupId(null); }}
           />
         </Suspense>
       )}

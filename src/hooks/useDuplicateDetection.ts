@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { detectDuplicates } from '../utils/parser';
-import type { CVATDataset, CVATFrameData, DetectionSettings, DuplicateGroup } from '../types';
+import type { CVATDataset, CVATFrameData, DetectionSettings, DuplicateGroup, DuplicateSelection } from '../types';
 
 export interface UseDuplicateDetectionArgs {
   dataset: CVATDataset | null;
@@ -36,6 +36,11 @@ export interface UseDuplicateDetectionReturn {
   setSelectedLabels: React.Dispatch<React.SetStateAction<string[]>>;
   selectedGroupId: string | null;
   setSelectedGroupId: React.Dispatch<React.SetStateAction<string | null>>;
+  selectedGroupIds: string[];
+  setSelectedGroupIds: React.Dispatch<React.SetStateAction<string[]>>;
+  selectionByBoxId: Record<string, DuplicateSelection>;
+  setBoxSelection: (boxId: string, selection: DuplicateSelection) => void;
+  setGroupSelection: (group: DuplicateGroup, selection: DuplicateSelection) => void;
 
   // Frame range
   frameRangeStart: string;
@@ -69,7 +74,10 @@ export function useDuplicateDetection({
   const [settings, setSettings] = useState<DetectionSettings>({
     matchLabelOnly: true,
     tolerancePx: 0.0,
-    overlapThreshold: 100.0,
+    // Start at the lower end of the supported IoU range so near-identical
+    // boxes are surfaced for explicit review. This only affects detection;
+    // the user must still choose which Shape to keep before deleting.
+    overlapThreshold: 50.0,
     useIoU: true,
   });
 
@@ -77,6 +85,8 @@ export function useDuplicateDetection({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [selectionByBoxId, setSelectionByBoxId] = useState<Record<string, DuplicateSelection>>({});
 
   // Frame range filter
   const [frameRangeStart, setFrameRangeStart] = useState<string>('');
@@ -99,11 +109,28 @@ export function useDuplicateDetection({
     }
   }, [dataset]);
 
+  useEffect(() => {
+    setSelectedGroupIds([]);
+    setSelectionByBoxId({});
+  }, [dataset, settings]);
+
+  const setBoxSelection = (boxId: string, selection: DuplicateSelection) => {
+    setSelectionByBoxId(previous => ({ ...previous, [boxId]: selection }));
+  };
+
+  const setGroupSelection = (group: DuplicateGroup, selection: DuplicateSelection) => {
+    setSelectionByBoxId(previous => {
+      const next = { ...previous };
+      group.boxes.forEach(box => { next[box.id] = selection; });
+      return next;
+    });
+  };
+
   // Calculate duplicates dynamically based on dataset and settings
   const duplicateGroups = useMemo(() => {
     if (!dataset) return [];
-    return detectDuplicates(dataset, settings);
-  }, [dataset, settings]);
+    return detectDuplicates(dataset, settings, { skipFramesWithSkipLabel: skipFrameFilterEnabled });
+  }, [dataset, settings, skipFrameFilterEnabled]);
 
   // Reset page when duplicates change or search filters update
   useEffect(() => {
@@ -311,6 +338,11 @@ export function useDuplicateDetection({
     setSelectedLabels,
     selectedGroupId,
     setSelectedGroupId,
+    selectedGroupIds,
+    setSelectedGroupIds,
+    selectionByBoxId,
+    setBoxSelection,
+    setGroupSelection,
     frameRangeStart,
     setFrameRangeStart,
     frameRangeEnd,

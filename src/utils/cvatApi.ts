@@ -1,4 +1,4 @@
-import type { CVATAttribute, CVATBox, CVATDataset, CVATFrameData } from '../types';
+import type { CVATAttribute, CVATBox, CVATDataset, CVATFrameData, CvatShapePayload } from '../types';
 
 export interface DirectCvatConnection {
   mode: 'direct';
@@ -16,7 +16,7 @@ export interface ElectronCvatConnection extends Omit<DirectCvatConnection, 'mode
 
 export type CvatConnection = DirectCvatConnection | VercelCvatConnection | ElectronCvatConnection;
 
-type CvatResource = 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobAnnotations' | 'jobFrame' | 'labels';
+type CvatResource = 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobAnnotations' | 'jobAnnotationsDelete' | 'jobFrame' | 'labels';
 
 interface DesktopCvatResponse {
   status: number;
@@ -27,10 +27,12 @@ interface DesktopCvatResponse {
 declare global {
   interface Window {
     cvatDesktop?: {
-      request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; jobId?: number; frameId?: string }) => Promise<DesktopCvatResponse>;
+      request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; jobId?: number; frameId?: string; method?: 'GET' | 'PATCH'; body?: unknown }) => Promise<DesktopCvatResponse>;
       getStoredToken: () => Promise<string | null>;
       saveToken: (token: string) => Promise<void>;
       hasDefaultToken: () => Promise<boolean>;
+      saveBackup?: (payload: unknown) => Promise<{ path: string }>;
+      openBackupFolder?: () => Promise<void>;
     };
   }
 }
@@ -67,19 +69,8 @@ interface CvatJob extends CvatJobSummary {
   task_id?: number;
 }
 
-interface CvatShape {
+interface CvatShape extends Omit<CvatShapePayload, 'id'> {
   id?: number;
-  label_id: number;
-  frame: number;
-  type: string;
-  points: number[];
-  occluded?: boolean;
-  z_order?: number;
-  group?: number;
-  source?: string;
-  outside?: boolean;
-  keyframe?: boolean;
-  attributes?: { spec_id: number; value: string }[];
 }
 
 interface CvatTrack {
@@ -118,17 +109,21 @@ function apiBaseUrl(serverUrl: string): string {
   return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 }
 
-async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T> {
+async function cvatFetch<T>(connection: CvatConnection, path: string, options?: { method?: 'GET' | 'PATCH'; body?: unknown }): Promise<T> {
   if (connection.mode === 'electron') {
-    const response = await requestDesktop(connection, requestFromPath(path));
+    const response = await requestDesktop(connection, { ...requestFromPath(path), method: options?.method, body: options?.body });
     if (response.status < 200 || response.status >= 300) {
+      const detail = response.data && typeof response.data === 'object'
+        ? String((response.data as { detail?: unknown; message?: unknown }).detail ?? (response.data as { message?: unknown }).message ?? '')
+        : '';
       throw new Error(response.status === 401 || response.status === 403
-        ? 'PAT không hợp lệ, đã hết hạn hoặc không có quyền đọc CVAT.'
-        : `CVAT trả về lỗi ${response.status}.`);
+        ? 'PAT không hợp lệ, đã hết hạn hoặc không có quyền đọc/xóa CVAT.'
+        : `CVAT trả về lỗi ${response.status}${detail ? `: ${detail}` : '.'}`);
     }
     return response.data as T;
   }
 
+  if (options?.method && options.method !== 'GET') throw new Error('Xóa annotation CVAT chỉ được phép trên bản desktop.');
   const response = await fetch(connection.mode === 'vercel' ? proxyUrl(path) : `${apiBaseUrl(connection.serverUrl)}${path}`, {
     headers: {
       Accept: 'application/vnd.cvat+json, application/json',
@@ -138,7 +133,7 @@ async function cvatFetch<T>(connection: CvatConnection, path: string): Promise<T
 
   if (!response.ok) {
     const message = response.status === 401 || response.status === 403
-      ? 'Token không có quyền đọc Task này.'
+      ? 'Token không có quyền đọc hoặc xóa dữ liệu CVAT này.'
       : `CVAT trả về lỗi ${response.status}.`;
     throw new Error(message);
   }
@@ -152,6 +147,8 @@ function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame
   if (jobsMatch) return { resource: 'jobs', taskId: Number(jobsMatch[1]) };
   const labelsMatch = path.match(/^\/labels\?task_id=(\d+)&page_size=1000$/);
   if (labelsMatch) return { resource: 'labels', taskId: Number(labelsMatch[1]) };
+  const jobDeleteMatch = path.match(/^\/jobs\/(\d+)\/annotations\?action=delete$/);
+  if (jobDeleteMatch) return { resource: 'jobAnnotationsDelete', jobId: Number(jobDeleteMatch[1]) };
   const jobMatch = path.match(/^\/jobs\/(\d+)(\/annotations)?$/);
   if (jobMatch) return { resource: jobMatch[2] ? 'jobAnnotations' : 'job', jobId: Number(jobMatch[1]) };
   const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
@@ -161,7 +158,7 @@ function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame
 
 async function requestDesktop(
   connection: ElectronCvatConnection,
-  request: { resource: CvatResource; taskId?: number; jobId?: number; frameId?: string },
+  request: { resource: CvatResource; taskId?: number; jobId?: number; frameId?: string; method?: 'GET' | 'PATCH'; body?: unknown },
 ): Promise<DesktopCvatResponse> {
   if (!window.cvatDesktop) throw new Error('Hãy chạy tính năng này trong app Windows.');
   return window.cvatDesktop.request({ ...request, serverUrl: connection.serverUrl.trim(), token: connection.token.trim() });
@@ -224,6 +221,10 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations, fram
     const box: CVATBox = {
       id: String(shape.id ?? `${trackId ?? 'shape'}-${shape.frame}-${globalIndex}`),
       label,
+      labelId: shape.label_id,
+      serverShapeId: trackId === undefined && Number.isInteger(shape.id) ? shape.id : undefined,
+      annotationKind: trackId === undefined ? 'shape' : 'track',
+      serverPayload: Number.isInteger(shape.id) ? { ...shape, id: shape.id!, attributes: shape.attributes ? [...shape.attributes] : undefined } : undefined,
       xtl,
       ytl,
       xbr,
@@ -274,7 +275,7 @@ export async function loadCvatTaskDataset(connection: CvatConnection, taskId: nu
     cvatFetch<CvatAnnotations>(connection, `/tasks/${taskId}/annotations`),
     listCvatTaskLabels(connection, taskId),
   ]);
-  return toCvatDataset({ ...task, labels: labels.length > 0 ? labels : task.labels }, annotations);
+  return { ...toCvatDataset({ ...task, labels: labels.length > 0 ? labels : task.labels }, annotations), source: 'cvat' };
 }
 
 export async function loadCvatJobDataset(connection: CvatConnection, taskId: number, jobId: number): Promise<CVATDataset> {
@@ -284,7 +285,117 @@ export async function loadCvatJobDataset(connection: CvatConnection, taskId: num
     cvatFetch<CvatAnnotations>(connection, `/jobs/${jobId}/annotations`),
     listCvatTaskLabels(connection, taskId),
   ]);
-  return toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}`, labels: labels.length > 0 ? labels : task.labels }, annotations, job);
+  return {
+    ...toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}`, labels: labels.length > 0 ? labels : task.labels }, annotations, job),
+    source: 'cvat',
+    cvatContext: { serverUrl: connection.mode === 'electron' || connection.mode === 'direct' ? connection.serverUrl : '', taskId, jobId },
+  };
+}
+
+export interface CvatDeleteResult {
+  backupPath: string;
+  deletedShapeIds: number[];
+}
+
+function comparableShape(shape: CvatShapePayload | undefined): unknown {
+  if (!shape) return null;
+  return {
+    id: shape.id,
+    label_id: shape.label_id,
+    frame: shape.frame,
+    type: shape.type,
+    points: shape.points,
+    occluded: shape.occluded,
+    z_order: shape.z_order,
+    group: shape.group,
+    source: shape.source,
+    outside: shape.outside,
+    keyframe: shape.keyframe,
+    attributes: [...(shape.attributes ?? [])].sort((a, b) => a.spec_id - b.spec_id || a.value.localeCompare(b.value)),
+  };
+}
+
+function shapeMatches(expected: CvatShapePayload | undefined, actual: CvatShape | undefined): boolean {
+  return Boolean(expected && actual && Number.isInteger(actual.id) && JSON.stringify(comparableShape(expected)) === JSON.stringify(comparableShape(actual as CvatShapePayload)));
+}
+
+async function getJobAnnotations(connection: CvatConnection, jobId: number): Promise<CvatAnnotations> {
+  return cvatFetch<CvatAnnotations>(connection, `/jobs/${jobId}/annotations`);
+}
+
+/**
+ * Desktop-only, optimistic-but-verified deletion of selected Job Shapes.
+ * The server is re-read immediately before and after PATCH; no retry is made.
+ */
+export async function deleteCvatJobShapes(
+  connection: CvatConnection,
+  taskId: number,
+  jobId: number,
+  deleteBoxes: CVATBox[],
+  keepBoxes: CVATBox[],
+): Promise<CvatDeleteResult> {
+  if (connection.mode !== 'electron') throw new Error('Xóa annotation CVAT chỉ được phép trên bản desktop.');
+  if (!window.cvatDesktop?.saveBackup) throw new Error('Bản desktop hiện không hỗ trợ lưu bản sao phục hồi.');
+  if (deleteBoxes.length === 0) throw new Error('Chưa chọn box nào để xóa.');
+
+  const allBoxes = [...deleteBoxes, ...keepBoxes];
+  if (allBoxes.some(box => box.annotationKind !== 'shape' || !Number.isInteger(box.serverShapeId) || !box.serverPayload)) {
+    throw new Error('Chỉ được xóa Shape có ID server từ một CVAT Job; Track và dữ liệu ZIP không được hỗ trợ.');
+  }
+  const uniqueDeleteIds = [...new Set(deleteBoxes.map(box => box.serverShapeId!))];
+  const uniqueKeepIds = [...new Set(keepBoxes.map(box => box.serverShapeId!))];
+  if (uniqueDeleteIds.some(id => uniqueKeepIds.includes(id))) {
+    throw new Error('Một Shape đang vừa được chọn giữ vừa được chọn xóa. Hãy kiểm tra lại lựa chọn.');
+  }
+
+  const before = await getJobAnnotations(connection, jobId);
+  const beforeShapes = new Map((before.shapes ?? []).filter(shape => Number.isInteger(shape.id)).map(shape => [shape.id!, shape]));
+  for (const box of allBoxes) {
+    const current = beforeShapes.get(box.serverShapeId!);
+    if (!current || !shapeMatches(box.serverPayload, current)) {
+      throw new Error(`Dữ liệu Shape #${box.serverShapeId} đã thay đổi trên CVAT. Hãy tải lại Job trước khi xóa.`);
+    }
+  }
+
+  const backup = await window.cvatDesktop.saveBackup({
+    savedAt: new Date().toISOString(),
+    serverUrl: connection.serverUrl,
+    taskId,
+    jobId,
+    deletedShapes: deleteBoxes.map(box => box.serverPayload),
+    keptShapes: keepBoxes.map(box => box.serverPayload),
+  });
+
+  let patchError: unknown = null;
+  try {
+    await cvatFetch<unknown>(connection, `/jobs/${jobId}/annotations?action=delete`, {
+      method: 'PATCH',
+      body: {
+        shapes: deleteBoxes.map(box => box.serverPayload),
+        tracks: [],
+        tags: [],
+      },
+    });
+  } catch (error) {
+    patchError = error;
+  }
+
+  const after = await getJobAnnotations(connection, jobId);
+  const afterShapes = new Map((after.shapes ?? []).filter(shape => Number.isInteger(shape.id)).map(shape => [shape.id!, shape]));
+  const remainingDeletes = uniqueDeleteIds.filter(id => afterShapes.has(id));
+  const missingKeepers = uniqueKeepIds.filter(id => !afterShapes.has(id));
+  const changedKeepers = keepBoxes.some(box => !shapeMatches(box.serverPayload, afterShapes.get(box.serverShapeId!)));
+  if (remainingDeletes.length > 0 || missingKeepers.length > 0 || changedKeepers) {
+    const detail = [
+      patchError instanceof Error ? `API báo lỗi nhưng GET sau đó chưa xác nhận đầy đủ: ${patchError.message}` : '',
+      remainingDeletes.length ? `chưa xóa: ${remainingDeletes.join(', ')}` : '',
+      missingKeepers.length ? `box giữ đã mất: ${missingKeepers.join(', ')}` : '',
+      changedKeepers ? 'box giữ đã thay đổi' : '',
+    ].filter(Boolean).join('; ');
+    throw new Error(`Không thể xác minh thao tác xóa (${detail || 'kết quả không rõ'}). Hãy tải lại Job; không tự gửi lại lệnh.`);
+  }
+
+  return { backupPath: backup.path, deletedShapeIds: uniqueDeleteIds };
 }
 
 function proxyUrl(path: string): string {

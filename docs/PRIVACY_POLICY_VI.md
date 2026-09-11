@@ -1,8 +1,8 @@
-# Chính sách quyền riêng tư — CVAT Box Tools
+# Chính sách quyền riêng tư — CVAT Tools
 
 Ngày hiệu lực: 05/09/2026
 
-CVAT Box Tools là ứng dụng kiểm tra annotation CVAT trên Windows, do Hoakim phát hành. Chính sách này áp dụng cho bản Store được build với PostHog tắt.
+CVAT Tools là ứng dụng kiểm tra annotation CVAT trên Windows, do cvattools phát hành. Chính sách này áp dụng cho bản Store được build với PostHog tắt.
 
 ## Dữ liệu được xử lý
 
@@ -24,4 +24,4 @@ Token nhập tay được ưu tiên thay token mặc định, mã hóa bằng c�
 
 ## Liên hệ
 
-Nếu có câu hỏi về quyền riêng tư hoặc yêu cầu hỗ trợ, vui lòng tạo yêu cầu tại [GitHub Issues của CVAT Box Tools](https://github.com/NDCLI/box/issues).
+Nếu có câu hỏi về quyền riêng tư hoặc yêu cầu hỗ trợ, vui lòng tạo yêu cầu tại [GitHub Issues của CVAT Tools](https://github.com/NDCLI/box/issues).
