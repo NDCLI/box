@@ -212,9 +212,14 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations, fram
 
   let globalIndex = 1;
   const addShape = (shape: CvatShape, trackId?: number, trackAttributes?: { spec_id: number; value: string }[]) => {
-    if (shape.type !== 'rectangle' || shape.outside || shape.points.length < 4) return;
+    const isMask = shape.type === 'mask';
+    if ((!isMask && shape.type !== 'rectangle') || shape.outside || shape.points.length < (isMask ? 5 : 4)) return;
     const label = labelsById.get(shape.label_id)?.name ?? `label_${shape.label_id}`;
-    const [xtl, ytl, xbr, ybr] = shape.points;
+    const [xtl, ytl, right, bottom] = isMask ? shape.points.slice(-4) : shape.points;
+    if (isMask && (![xtl, ytl, right, bottom].every(Number.isFinite) || right < xtl || bottom < ytl)) return;
+    // CVAT masks store RLE followed by inclusive pixel bounds.
+    const xbr = isMask ? right + 1 : right;
+    const ybr = isMask ? bottom + 1 : bottom;
     const frame = getFrame(shape.frame);
     frame.width = Math.max(frame.width, Math.ceil(xbr));
     frame.height = Math.max(frame.height, Math.ceil(ybr));

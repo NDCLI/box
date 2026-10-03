@@ -3,6 +3,41 @@ import { deleteCvatJobShapes, toCvatDataset } from '../cvatApi';
 import type { CVATBox } from '../../types';
 
 describe('toCvatDataset', () => {
+  it('counts masks alongside rectangles using their pixel bounds and preserves the original mask payload', () => {
+    const mask = {
+      id: 101, label_id: 7, frame: 0, type: 'mask',
+      points: [0, 4, 2, 3, 5, 6], attributes: [{ spec_id: 8, value: 'true' }],
+    };
+    const dataset = toCvatDataset(
+      { id: 721, name: 'Masks', size: 2, labels: [{ id: 7, name: 'person', attributes: [{ id: 8, name: 'pass' }] }] },
+      { shapes: [mask, { id: 102, label_id: 7, frame: 1, type: 'rectangle', points: [10, 20, 30, 40] }] },
+    );
+
+    expect(dataset.frames[0].boxes).toMatchObject([{
+      id: '101', label: 'person', xtl: 2, ytl: 3, xbr: 6, ybr: 7,
+      globalIndex: 1, annotationKind: 'shape', serverShapeId: 101, serverPayload: mask,
+      attributes: [{ name: 'pass', value: 'true' }],
+    }]);
+    expect(dataset.frames[1].boxes[0]).toMatchObject({ globalIndex: 2, xtl: 10, ytl: 20, xbr: 30, ybr: 40 });
+  });
+
+  it('accepts single-pixel masks and ignores outside or malformed masks without gaps in numbering', () => {
+    const shape = { label_id: 7, frame: 0, type: 'mask' };
+    const dataset = toCvatDataset(
+      { id: 721, name: 'Masks' },
+      { shapes: [
+        { ...shape, points: [0, 1, 10, 20, 10, 20], outside: true },
+        { ...shape, points: [10, 20, 10, 20] },
+        { ...shape, points: [0, 1, 10, 20, 9, 20] },
+        { ...shape, points: [0, 1, 10, 20, NaN, 20] },
+        { ...shape, points: [0, 1, 10, 20, 10, 20] },
+      ] },
+    );
+
+    expect(dataset.frames[0].boxes).toMatchObject([{ globalIndex: 1, xtl: 10, ytl: 20, xbr: 11, ybr: 21 }]);
+    expect(dataset.frames[0].boxes).toHaveLength(1);
+  });
+
   it('converts CVAT rectangles into frame boxes and retains labels', () => {
     const dataset = toCvatDataset(
       {

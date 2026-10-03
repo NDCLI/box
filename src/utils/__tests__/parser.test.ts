@@ -67,6 +67,40 @@ const defaultSettings: DetectionSettings = {
   useIoU: true,
 };
 
+describe('CVAT image masks', () => {
+  it('reads mask bounds, labels and attributes and numbers mixed shapes in document order', () => {
+    const xml = imageXml([{ boxes: [
+      '<mask label="person" left="10" top="20" width="1" height="1" rle="0, 1" occluded="1"><attribute name="pass">true</attribute></mask>',
+      boxStr({ label: 'car', xtl: 30, ytl: 40, xbr: 50, ybr: 60 }),
+      '<mask label="head" left="70" top="80" width="10" height="20" rle="0, 200"/>',
+    ] }]);
+    const dataset = parseCVATXML(xml, 'masks.xml');
+
+    expect(dataset.labels).toEqual(['person', 'car', 'head']);
+    expect(dataset.frames[0].boxes).toMatchObject([
+      { id: '1', globalIndex: 1, label: 'person', xtl: 10, ytl: 20, xbr: 11, ybr: 21, occluded: true, attributes: [{ name: 'pass', value: 'true' }] },
+      { id: '2', globalIndex: 2, label: 'car', xtl: 30, ytl: 40, xbr: 50, ybr: 60 },
+      { id: '3', globalIndex: 3, label: 'head', xtl: 70, ytl: 80, xbr: 80, ybr: 100 },
+    ]);
+  });
+
+  it('removes the duplicate mask from exported XML while retaining RLE and other shapes', () => {
+    const mask = '<mask label="person" left="10" top="20" width="2" height="2" rle="0, 4"/>';
+    const xml = imageXml([{ boxes: [mask, boxStr({ label: 'car', xtl: 0, ytl: 0, xbr: 1, ybr: 1 }), mask] }]);
+    const dataset = parseCVATXML(xml, 'masks.xml');
+    const groups = detectDuplicates(dataset, defaultSettings);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].boxes.map(box => box.id)).toEqual(['1', '3']);
+
+    const cleaned = removeDuplicatesFromXML(xml, dataset, groups);
+    const doc = new DOMParser().parseFromString(cleaned, 'text/xml');
+    expect(doc.querySelectorAll('mask')).toHaveLength(1);
+    expect(doc.querySelector('mask')?.getAttribute('rle')).toBe('0, 4');
+    expect(doc.querySelectorAll('box')).toHaveLength(1);
+    expect(parseCVATXML(cleaned, 'cleaned.xml').frames[0].boxes).toHaveLength(2);
+  });
+});
+
 // ─── calculateIoU ───────────────────────────────────────────────────
 
 describe('calculateIoU', () => {

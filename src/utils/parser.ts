@@ -58,7 +58,7 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
   
   // Backup: if meta doesn't have labels, scan boxes
   if (labelsSet.size === 0) {
-    const allBoxes = doc.querySelectorAll('box');
+    const allBoxes = doc.querySelectorAll('box, mask');
     allBoxes.forEach(box => {
       const l = box.getAttribute('label');
       if (l) labelsSet.add(l);
@@ -86,14 +86,15 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
       const height = parseFloat(imgNode.getAttribute('height') || '0');
 
       const boxes: CVATBox[] = [];
-      const boxNodes = imgNode.querySelectorAll('box');
+      const boxNodes = Array.from(imgNode.children).filter(node => node.tagName === 'box' || node.tagName === 'mask');
 
       boxNodes.forEach((boxNode, boxIdx) => {
         const label = boxNode.getAttribute('label') || 'unlabeled';
-        const xtl = parseFloat(boxNode.getAttribute('xtl') || '0');
-        const ytl = parseFloat(boxNode.getAttribute('ytl') || '0');
-        const xbr = parseFloat(boxNode.getAttribute('xbr') || '0');
-        const ybr = parseFloat(boxNode.getAttribute('ybr') || '0');
+        const isMask = boxNode.tagName === 'mask';
+        const xtl = parseFloat(boxNode.getAttribute(isMask ? 'left' : 'xtl') || '0');
+        const ytl = parseFloat(boxNode.getAttribute(isMask ? 'top' : 'ytl') || '0');
+        const xbr = isMask ? xtl + parseFloat(boxNode.getAttribute('width') || '0') : parseFloat(boxNode.getAttribute('xbr') || '0');
+        const ybr = isMask ? ytl + parseFloat(boxNode.getAttribute('height') || '0') : parseFloat(boxNode.getAttribute('ybr') || '0');
         const occluded = boxNode.getAttribute('occluded') === '1';
         const z_order = boxNode.getAttribute('z_order') ? parseInt(boxNode.getAttribute('z_order') || '0', 10) : undefined;
         const group_id = boxNode.getAttribute('group_id') ? parseInt(boxNode.getAttribute('group_id') || '0', 10) : undefined;
@@ -330,7 +331,7 @@ export function removeDuplicatesFromXML(
   if (dataset.type === 'images') {
     const imageNodes = doc.querySelectorAll('image');
     imageNodes.forEach((imgNode) => {
-      const boxNodes = imgNode.querySelectorAll('box');
+      const boxNodes = Array.from(imgNode.children).filter(node => node.tagName === 'box' || node.tagName === 'mask');
       boxNodes.forEach((boxNode) => {
         const parsedBoxId = boxNode.getAttribute('id');
         const currentGlobalIndex = absoluteBoxIdx++;
