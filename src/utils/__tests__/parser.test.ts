@@ -614,6 +614,12 @@ describe('generateCSVReport', () => {
     expect(lines[0]).toContain('Khung Hình');
   });
 
+  it('uses English headings and notes when requested', () => {
+    const csv = generateCSVReport([], 'en');
+    expect(csv).toContain('Frame/File name');
+    expect(csv).not.toContain('Khung Hình');
+  });
+
   it('generates correct rows for a single duplicate group', () => {
     const groups: DuplicateGroup[] = [
       {

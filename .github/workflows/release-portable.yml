@@ -1,0 +1,37 @@
+name: Release portable patch
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run desktop:build
+      - run: node desktop/prepare-default-token.cjs
+      - run: node desktop/prepare-default-tokens.cjs
+      - run: npx electron-builder --win portable --x64 --publish never
+      - name: Create checksum
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $file = "release/windows/CVAT-Box-Counter-$version-portable-win-x64.exe"
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $file -Leaf)" | Set-Content "$file.sha256" -NoNewline
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/windows/CVAT-Box-Counter-*-portable-win-x64.exe
+            release/windows/CVAT-Box-Counter-*-portable-win-x64.exe.sha256

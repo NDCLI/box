@@ -50,6 +50,35 @@ html, body, #root, .dark-theme {
 }
 
 .app-main { position: relative; }
+.workspace-shell { display:flex; min-width:0; }
+.project-sidebar { width:190px; flex:0 0 190px; padding:1.5rem .75rem; border-right:1px solid var(--border); background:rgba(7,10,18,.72); display:flex; flex-direction:column; gap:.5rem; }
+.project-sidebar button { display:flex; align-items:center; gap:.7rem; padding:.8rem .9rem; border:1px solid transparent; border-radius:.8rem; background:transparent; color:var(--muted); font:inherit; font-weight:650; text-align:left; cursor:pointer; }
+.project-sidebar button svg { width:1.1rem; height:1.1rem; background:transparent!important; border:0!important; }
+.project-sidebar button.active { color:#dffaff; background:linear-gradient(110deg,rgba(34,211,238,.16),rgba(99,102,241,.12)); border-color:rgba(34,211,238,.28); }
+.anpr-project { max-width:76rem; margin:0 auto; color:var(--text); }
+.anpr-project>header { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:1rem 0 2rem; }
+.anpr-project h1 { margin:.25rem 0; font-size:clamp(1.8rem,4vw,2.7rem); letter-spacing:-.04em; }
+.anpr-project header p:not(.anpr-kicker) { color:var(--muted); margin:.4rem 0; }
+.anpr-kicker { color:#85e9f7; font:700 .68rem ui-monospace,monospace; letter-spacing:.15em; }
+.anpr-upload,.anpr-toolbar button { display:inline-flex; align-items:center; gap:.5rem; border:1px solid rgba(34,211,238,.35); border-radius:.75rem; padding:.7rem 1rem; background:linear-gradient(120deg,#0e7490,#4338ca); color:white; font-weight:700; cursor:pointer; white-space:nowrap; }
+.anpr-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.8rem; margin-bottom:1rem; }
+.anpr-kpis>div,.anpr-card { border:1px solid var(--border); border-radius:1rem; background:linear-gradient(145deg,#111a2a,#0b101c); padding:1.1rem; }
+.anpr-kpis small { display:block; color:var(--muted); font-size:.76rem; }
+.anpr-kpis b { display:block; margin-top:.4rem; font-size:1.75rem; }
+.anpr-kpis .warn { color:var(--amber); }
+.anpr-summary { display:flex; gap:.8rem; align-items:center; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+.anpr-summary svg { flex:none; color:var(--cyan); background:transparent!important; border:0!important; }
+.anpr-summary p,.anpr-foot { margin:.25rem 0 0; color:var(--muted); font-size:.8rem; }
+.anpr-toolbar { display:flex; gap:.6rem; padding:1rem 0; }
+.anpr-toolbar input,.anpr-toolbar select { min-width:0; flex:1; border:1px solid var(--border); border-radius:.65rem; padding:.65rem; background:#0c1220; color:var(--text); }
+.anpr-toolbar button { padding:.55rem .8rem; }
+.anpr-table-wrap { overflow:auto; max-height:60vh; }
+.anpr-project table { width:100%; border-collapse:collapse; font-size:.82rem; }
+.anpr-project th,.anpr-project td { padding:.65rem; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+.anpr-tag { display:inline-block; margin:.1rem; padding:.15rem .4rem; border-radius:.35rem; background:rgba(251,191,74,.12); color:#fcd88a; }
+.anpr-empty,.anpr-error { padding:1rem; color:var(--muted); }
+.anpr-error { display:flex; gap:.5rem; color:#fda4af; }
+@media(max-width:760px){.workspace-shell{display:block}.project-sidebar{width:auto;padding:.5rem;flex-direction:row;overflow:auto;border-right:0;border-bottom:1px solid var(--border)}.project-sidebar button{white-space:nowrap}.project-sidebar button span{font-size:.78rem}.anpr-project>header{align-items:flex-start;flex-direction:column}.anpr-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.anpr-toolbar{flex-wrap:wrap}.anpr-toolbar input{flex-basis:60%}}
 
 .app-header {
   border-bottom-color: rgba(96, 165, 250, 0.2) !important;

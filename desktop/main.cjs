@@ -1,6 +1,9 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const os = require('node:os');
+const crypto = require('node:crypto');
+const { spawn } = require('node:child_process');
 const { safeStorage } = require('electron');
 
 const APP_ID = 'com.ndcli.cvatboxcounter';
@@ -42,12 +45,16 @@ function decryptToken(value) {
   return safeStorage.decryptString(value);
 }
 
-ipcMain.handle('cvat:token:get', async () => {
+ipcMain.handle('cvat:token:get', async (_event, serverUrl) => {
   if (!safeStorage.isEncryptionAvailable()) return null;
   try {
     return decryptToken(await fs.readFile(storedTokenPath()));
   } catch {
-    return null;
+    const fallback = tokenForServer(serverUrl);
+    if (!fallback) return null;
+    await fs.mkdir(path.dirname(storedTokenPath()), { recursive: true });
+    await fs.writeFile(storedTokenPath(), encryptToken(fallback));
+    return fallback;
   }
 });
 
@@ -152,6 +159,41 @@ ipcMain.handle('cvat:backup:open-folder', async () => {
   if (result) throw new Error(result);
 });
 
+async function checkForPortableUpdate() {
+  if (process.platform !== 'win32' || !process.env.PORTABLE_EXECUTABLE_FILE || app.isPackaged === false) return;
+  try {
+    const response = await fetch('https://api.github.com/repos/NDCLI/box/releases/latest', {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'CVAT-Box-Counter-Updater' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) return;
+    const release = await response.json();
+    const latest = String(release.tag_name || '').replace(/^v/, '');
+    const parts = value => value.split('.').map(Number);
+    const currentParts = parts(app.getVersion()), latestParts = parts(latest);
+    if (latestParts.length !== 3 || latestParts.some(Number.isNaN)) return;
+    const firstDifference = latestParts.findIndex((n, i) => n !== currentParts[i]);
+    if (firstDifference < 0 || latestParts[firstDifference] < currentParts[firstDifference]) return;
+    const asset = release.assets?.find(item => item.name === `CVAT-Box-Counter-${latest}-portable-win-x64.exe`);
+    const checksum = release.assets?.find(item => item.name === `${asset?.name}.sha256`);
+    if (!asset || !checksum || asset.size > 300 * 1024 * 1024) return;
+    const [binaryResponse, hashResponse] = await Promise.all([fetch(asset.browser_download_url), fetch(checksum.browser_download_url)]);
+    if (!binaryResponse.ok || !hashResponse.ok) return;
+    const binary = Buffer.from(await binaryResponse.arrayBuffer());
+    const expectedHash = (await hashResponse.text()).trim().split(/\s+/)[0].toLowerCase();
+    if (binary.length !== asset.size || crypto.createHash('sha256').update(binary).digest('hex') !== expectedHash) return;
+    const choice = await dialog.showMessageBox({ type: 'info', buttons: ['Cập nhật ngay', 'Để sau'], defaultId: 0, cancelId: 1, message: `Có bản cập nhật CVAT Box Counter ${latest}.`, detail: 'Ứng dụng sẽ tải bản vá và khởi động lại. PAT đã lưu được giữ trên máy này.' });
+    if (choice.response !== 0) return;
+    const target = process.env.PORTABLE_EXECUTABLE_FILE;
+    const staged = path.join(app.getPath('temp'), `cvat-box-${latest}.exe`);
+    await fs.writeFile(staged, binary);
+    const script = `$ErrorActionPreference='Stop'; $target=${JSON.stringify(target)}; $staged=${JSON.stringify(staged)}; $pidToWait=${process.pid}; while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; $backup="$target.old"; try { Move-Item -LiteralPath $target -Destination $backup -Force; Move-Item -LiteralPath $staged -Destination $target -Force; Start-Process -FilePath $target; Remove-Item -LiteralPath $backup -Force } catch { if ((Test-Path -LiteralPath $backup) -and !(Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $backup -Destination $target -Force }; exit 1 }`;
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    app.quit();
+  } catch { /* Update checks must not interrupt normal app startup. */ }
+}
+
 function isExternalUrl(url) {
   return url.startsWith('http://') || url.startsWith('https://');
 }
@@ -210,6 +252,7 @@ app.setAppUserModelId(APP_ID);
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   createWindow();
+  setTimeout(() => void checkForPortableUpdate(), 8000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

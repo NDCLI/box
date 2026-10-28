@@ -1,4 +1,5 @@
 import { CVATBox, CVATFrameData, CVATDataset, DuplicateGroup, DetectionSettings, CVATAttribute } from '../types';
+import type { Locale } from '../i18n/LocaleProvider';
 
 /**
  * Calculates the Intersection over Union (IoU) of two bounding boxes.
@@ -372,14 +373,16 @@ export function removeDuplicatesFromXML(
 /**
  * Helper to generate CSV of duplicates for download
  */
-export function generateCSVReport(duplicateGroups: DuplicateGroup[]): string {
-  const headers = ['Mã Nhóm', 'Khung Hình/Tên File', 'ID Khung Hình', 'Nhãn Bounding Box', 'XTL (Trái)', 'YTL (Trên)', 'XBR (Phải)', 'YBR (Dưới)', 'Độ Trùng Lặp (%)', 'Ghi Chú'];
+export function generateCSVReport(duplicateGroups: DuplicateGroup[], locale: Locale = 'vi'): string {
+  const headers = locale === 'en'
+    ? ['Group ID', 'Frame/File name', 'Frame ID', 'Bounding-box label', 'XTL (Left)', 'YTL (Top)', 'XBR (Right)', 'YBR (Bottom)', 'Overlap (%)', 'Notes']
+    : ['Mã Nhóm', 'Khung Hình/Tên File', 'ID Khung Hình', 'Nhãn Bounding Box', 'XTL (Trái)', 'YTL (Trên)', 'XBR (Phải)', 'YBR (Dưới)', 'Độ Trùng Lặp (%)', 'Ghi Chú'];
   const rows: string[][] = [headers];
 
   duplicateGroups.forEach((group, gIdx) => {
     group.boxes.forEach((box, bIdx) => {
       rows.push([
-        `Nhom_${gIdx + 1}`,
+        locale === 'en' ? `Group_${gIdx + 1}` : `Nhom_${gIdx + 1}`,
         group.frameName,
         group.frameId,
         box.label,
@@ -387,8 +390,8 @@ export function generateCSVReport(duplicateGroups: DuplicateGroup[]): string {
         box.ytl.toFixed(2),
         box.xbr.toFixed(2),
         box.ybr.toFixed(2),
-        bIdx === 0 ? 'Mẫu Giữ Lại' : `${group.overlapPercentage}% (Trùng Lặp - Sẽ Xóa)`,
-        bIdx === 0 ? 'Giữ lại làm gốc' : `Trùng lặp với box đầu tiên`
+        bIdx === 0 ? (locale === 'en' ? 'Kept sample' : 'Mẫu Giữ Lại') : (locale === 'en' ? `${group.overlapPercentage}% (Duplicate - marked for deletion)` : `${group.overlapPercentage}% (Trùng Lặp - Sẽ Xóa)`),
+        bIdx === 0 ? (locale === 'en' ? 'Kept as the reference' : 'Giữ lại làm gốc') : (locale === 'en' ? 'Duplicate of the first box' : 'Trùng lặp với box đầu tiên')
       ]);
     });
   });

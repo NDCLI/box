@@ -29,7 +29,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     let active = true;
     if (desktopAvailable) setIsTokenRestoring(true);
     void window.cvatDesktop?.hasDefaultToken().then((hasToken) => { if (active) setHasDefaultToken(hasToken); });
-    void window.cvatDesktop?.getStoredToken()
+    void window.cvatDesktop?.getStoredToken(serverUrl)
       .then((storedToken) => { if (active && storedToken) setToken(storedToken); })
       .finally(() => { if (active) setIsTokenRestoring(false); });
     return () => { active = false; };

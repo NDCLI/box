@@ -22,6 +22,12 @@ npm install
 npm run desktop:dev
 ```
 
+### Cập nhật bản Portable
+
+Bản Portable đầy đủ có thể kèm PAT mặc định. Khi chạy lần đầu, ứng dụng lưu PAT vào Windows Credential Encryption (DPAPI) trong thư mục dữ liệu người dùng. Các bản vá Portable phát hành trên GitHub không chứa PAT; updater kiểm tra GitHub Releases, xác minh SHA-256, rồi thay file Portable và khởi động lại ứng dụng. Mỗi máy cần cài bản đầy đủ có updater một lần; sau đó có thể cập nhật bằng các bản vá.
+
+Để phát hành một bản vá, tăng phiên bản trong `package.json` và `package-lock.json`, commit/push mã nguồn, rồi đẩy tag tương ứng, ví dụ `v1.0.5`. GitHub Actions sẽ build Portable không PAT và tạo GitHub Release kèm checksum. Không đẩy `token.txt`, `access_tokens.csv`, hoặc bản Portable đầy đủ lên repo công khai.
+
 Tạo bản renderer desktop hoặc đóng gói cả Setup và Portable:
 
 ```bash

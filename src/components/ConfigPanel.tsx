@@ -4,6 +4,7 @@ import {
   X
 } from 'lucide-react';
 import { type DetectionSettings } from '../types';
+import { useLocale } from '../i18n/LocaleProvider';
 
 interface ConfigPanelProps {
   frameRange: { min: number; max: number };
@@ -32,6 +33,7 @@ export default function ConfigPanel({
   settings,
   onSettingsChange
 }: ConfigPanelProps) {
+  const { t } = useLocale();
   const [newExcludeLabel, setNewExcludeLabel] = useState("");
 
   return (
@@ -46,7 +48,7 @@ export default function ConfigPanel({
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
           {/* Frame Range Filter */}
           <div className="space-y-3">
-            <span className="text-xs font-bold text-slate-500 block uppercase tracking-wider">1. Lọc theo vùng Frame (Giới hạn: {frameRange.min} - {frameRange.max})</span>
+            <span className="text-xs font-bold text-slate-500 block uppercase tracking-wider">{t(`1. Lọc theo vùng Frame (Giới hạn: ${frameRange.min} - ${frameRange.max})`)}</span>
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <input
@@ -203,7 +205,7 @@ export default function ConfigPanel({
                     HỆ SỐ TRÙNG NHAU TỐI THIỂU (IoU)
                   </span>
                   <span className="text-xs font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
-                    {settings.overlapThreshold}% trùng nhau
+                    {t(`${settings.overlapThreshold}% trùng nhau`)}
                   </span>
                 </div>
                 <div className="flex items-center space-x-3">

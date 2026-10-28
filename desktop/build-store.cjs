@@ -50,7 +50,7 @@ async function main() {
       },
       appx: {
         identityName, publisher, publisherDisplayName,
-        languages: ['vi-VN'],
+        languages: ['en-US', 'vi-VN'],
         minVersion: '10.0.17763.0',
         maxVersionTested: '10.0.26100.0',
         backgroundColor: '#070a12',

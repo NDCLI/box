@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { LocaleProvider } from './i18n/LocaleProvider';
 import { listCvatJobs, listCvatTasks, loadCvatJobDataset, loadCvatTaskDataset } from './utils/cvatApi';
 import type { CVATDataset } from './types';
 
@@ -35,7 +36,7 @@ describe('CVAT Job session', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    await act(async () => root.render(<App />));
+    await act(async () => root.render(<LocaleProvider><App /></LocaleProvider>));
   });
 
   afterEach(async () => {

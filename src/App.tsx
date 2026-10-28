@@ -21,8 +21,13 @@ const PreviewModal = lazy(() => import('./components/PreviewModal'));
 import { removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
 import { deleteCvatJobShapes, loadCvatJobDataset, loadCvatTaskDataset } from './utils/cvatApi';
 import type { DuplicateGroup } from './types';
+import { translate, useLocale } from './i18n/LocaleProvider';
+import { AnprProject } from './components/AnprProject';
+import { LayoutDashboard, CarFront } from 'lucide-react';
 
 export default function App() {
+  const { locale } = useLocale();
+  const [project, setProject] = useState<'count' | 'anpr'>('count');
   // ── Exclude labels (persisted to localStorage) ──
   const [excludeLabels, setExcludeLabels] = useState<string[]>(() => {
     try {
@@ -113,7 +118,7 @@ export default function App() {
     }
     const frames = [...new Set(groups.map(group => group.frameId))].sort((a, b) => Number(a) - Number(b));
     const message = `Job #${cvatFrameSource.jobId}\nFrame: ${frames.join(', ')}\nSẽ xóa ${uniqueDelete.length} Shape.\n\nTiếp tục?`;
-    if (!window.confirm(message)) return;
+    if (!window.confirm(translate(message, locale))) return;
     fp.setError(null);
     fp.setSuccessMsg(null);
     try {
@@ -136,7 +141,7 @@ export default function App() {
     } catch (err) {
       fp.setError(err instanceof Error ? err.message : 'Không thể xóa Shape trên CVAT.');
     }
-  }, [cvatFrameSource, detection.selectionByBoxId, fp, isDesktopJob]);
+  }, [cvatFrameSource, detection.selectionByBoxId, fp, isDesktopJob, locale]);
 
   // ── Extended reset (clean up manual images too) ──
   const handleReset = useCallback(() => {
@@ -219,7 +224,7 @@ export default function App() {
   const handleDownloadCSVReport = useCallback(() => {
     if (detection.duplicateGroups.length === 0) return;
     try {
-      const csvContent = generateCSVReport(detection.duplicateGroups);
+      const csvContent = generateCSVReport(detection.duplicateGroups, locale);
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -233,7 +238,7 @@ export default function App() {
     } catch (err: any) {
       fp.setError('Lỗi khi xuất báo cáo CSV: ' + err.message);
     }
-  }, [fp, detection]);
+  }, [fp, detection, locale]);
 
   // Preserve download utilities for future UI integration
   void handleDownloadCleanedXML;
@@ -244,7 +249,13 @@ export default function App() {
     <div className="app-shell dark-theme min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased">
       <Header />
 
+      <div className="workspace-shell flex-1">
+      {fp.dataset && <nav className="project-sidebar" aria-label="Projects">
+        <button className={project === 'count' ? 'active' : ''} onClick={() => setProject('count')}><LayoutDashboard/><span>Box &amp; Trùng lặp</span></button>
+        <button className={project === 'anpr' ? 'active' : ''} onClick={() => setProject('anpr')}><CarFront/><span>ANPR biển số</span></button>
+      </nav>}
       <main className="app-main flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        {project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : <>
         {/* Upload Zone (shown when no dataset loaded) */}
         <div hidden={Boolean(fp.dataset)}>
           <UploadZone
@@ -272,7 +283,7 @@ export default function App() {
         />
 
         {/* Main application interface */}
-        {fp.dataset && (
+        {fp.dataset && project === 'count' && (
           <div className="space-y-6">
             <FileInfoBar
               file={fp.file}
@@ -341,7 +352,9 @@ export default function App() {
             />
           </div>
         )}
+        </>}
       </main>
+      </div>
 
       {/* Preview Modal */}
       {isPreviewOpen && detection.selectedGroup && detection.selectedFrameData && (
