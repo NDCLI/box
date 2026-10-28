@@ -210,7 +210,9 @@ async function checkForPortableUpdate(manual = false) {
     const target = isPortable ? process.env.PORTABLE_EXECUTABLE_FILE : path.dirname(process.execPath);
     if (!path.isAbsolute(target) || target === path.parse(target).root) throw new Error('Thư mục app không hợp lệ.');
     if (!isPortable) await fs.access(path.join(target, 'resources', 'app.asar'));
-    const staged = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'cvat-update-')), assetName);
+    const updateDirectory = path.join(isPortable ? path.dirname(target) : target, '.updates');
+    await fs.mkdir(updateDirectory, { recursive: true });
+    const staged = path.join(await fs.mkdtemp(path.join(updateDirectory, 'patch-')), assetName);
     await fs.writeFile(staged, binary);
     const quotePS = value => "'" + value.replace(/'/g, "''") + "'";
     const executableName = path.basename(process.execPath);
@@ -231,6 +233,8 @@ try {
   for ($attempt=0; $attempt -lt 30; $attempt++) {
     try { Move-Item -LiteralPath $target -Destination $backup; break } catch { if ($attempt -eq 29) { throw }; Start-Sleep -Seconds 1 }
   }
+  ${isPortable ? '' : `$payload=Join-Path $backup ${quotePS(path.relative(target, path.join(path.dirname(staged), 'unpacked')))}
+  $log=Join-Path $backup ${quotePS(path.relative(target, path.join(path.dirname(staged), 'update.log')))}`}
   Move-Item -LiteralPath $payload -Destination $target
   Start-Process -FilePath ${isPortable ? '$target' : `(Join-Path $target ${quotePS(executableName)})`} -WorkingDirectory ${isPortable ? '(Split-Path $target -Parent)' : '$target'} -WindowStyle Normal
   'Update completed' | Set-Content -LiteralPath $log
