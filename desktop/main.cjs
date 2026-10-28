@@ -159,31 +159,35 @@ ipcMain.handle('cvat:backup:open-folder', async () => {
   if (result) throw new Error(result);
 });
 
-async function checkForPortableUpdate() {
-  if (process.platform !== 'win32' || !process.env.PORTABLE_EXECUTABLE_FILE || app.isPackaged === false) return;
+let updateCheckRunning = false;
+ipcMain.handle('app:update:check', () => checkForPortableUpdate(true));
+async function checkForPortableUpdate(manual = false) {
+  if (updateCheckRunning) return { message: 'Đang kiểm tra cập nhật…' };
+  if (process.platform !== 'win32' || !process.env.PORTABLE_EXECUTABLE_FILE || app.isPackaged === false) return { message: 'Kiểm tra cập nhật chỉ dùng trong bản Portable Windows.' };
+  updateCheckRunning = true;
   try {
     const response = await fetch('https://api.github.com/repos/NDCLI/box/releases/latest', {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'CVAT-Box-Counter-Updater' },
       signal: AbortSignal.timeout(15000),
     });
-    if (!response.ok) return;
+    if (!response.ok) throw new Error(`Không kiểm tra được cập nhật (HTTP ${response.status}).`);
     const release = await response.json();
     const latest = String(release.tag_name || '').replace(/^v/, '');
     const parts = value => value.split('.').map(Number);
     const currentParts = parts(app.getVersion()), latestParts = parts(latest);
     if (latestParts.length !== 3 || latestParts.some(Number.isNaN)) return;
     const firstDifference = latestParts.findIndex((n, i) => n !== currentParts[i]);
-    if (firstDifference < 0 || latestParts[firstDifference] < currentParts[firstDifference]) return;
+    if (firstDifference < 0 || latestParts[firstDifference] < currentParts[firstDifference]) return { message: `Bạn đang dùng phiên bản mới nhất (${app.getVersion()}).` };
     const asset = release.assets?.find(item => item.name === `CVAT-Box-Counter-${latest}-portable-win-x64.exe`);
     const checksum = release.assets?.find(item => item.name === `${asset?.name}.sha256`);
-    if (!asset || !checksum || asset.size > 300 * 1024 * 1024) return;
+    if (!asset || !checksum || asset.size > 300 * 1024 * 1024) throw new Error('Bản phát hành chưa có đủ gói cập nhật và checksum.');
     const [binaryResponse, hashResponse] = await Promise.all([fetch(asset.browser_download_url), fetch(checksum.browser_download_url)]);
-    if (!binaryResponse.ok || !hashResponse.ok) return;
+    if (!binaryResponse.ok || !hashResponse.ok) throw new Error('Không tải được bản cập nhật.');
     const binary = Buffer.from(await binaryResponse.arrayBuffer());
     const expectedHash = (await hashResponse.text()).trim().split(/\s+/)[0].toLowerCase();
-    if (binary.length !== asset.size || crypto.createHash('sha256').update(binary).digest('hex') !== expectedHash) return;
+    if (binary.length !== asset.size || crypto.createHash('sha256').update(binary).digest('hex') !== expectedHash) throw new Error('Checksum bản cập nhật không khớp.');
     const choice = await dialog.showMessageBox({ type: 'info', buttons: ['Cập nhật ngay', 'Để sau'], defaultId: 0, cancelId: 1, message: `Có bản cập nhật CVAT Box Counter ${latest}.`, detail: 'Ứng dụng sẽ tải bản vá và khởi động lại. PAT đã lưu được giữ trên máy này.' });
-    if (choice.response !== 0) return;
+    if (choice.response !== 0) return { message: `Có phiên bản ${latest}. Bạn đã chọn cập nhật sau.` };
     const target = process.env.PORTABLE_EXECUTABLE_FILE;
     const staged = path.join(app.getPath('temp'), `cvat-box-${latest}.exe`);
     await fs.writeFile(staged, binary);
@@ -191,7 +195,8 @@ async function checkForPortableUpdate() {
     const encoded = Buffer.from(script, 'utf16le').toString('base64');
     spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     app.quit();
-  } catch { /* Update checks must not interrupt normal app startup. */ }
+  } catch (error) { if (manual) throw error; }
+  finally { updateCheckRunning = false; }
 }
 
 function isExternalUrl(url) {

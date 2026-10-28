@@ -23,11 +23,12 @@ import { deleteCvatJobShapes, loadCvatJobDataset, loadCvatTaskDataset } from './
 import type { DuplicateGroup } from './types';
 import { translate, useLocale } from './i18n/LocaleProvider';
 import { AnprProject } from './components/AnprProject';
-import { LayoutDashboard, CarFront } from 'lucide-react';
+import { LayoutDashboard, CarFront, Settings } from 'lucide-react';
+import SettingsPanel from './components/SettingsPanel';
 
 export default function App() {
   const { locale } = useLocale();
-  const [project, setProject] = useState<'count' | 'anpr'>('count');
+  const [project, setProject] = useState<'count' | 'anpr' | 'settings'>('count');
   // ── Exclude labels (persisted to localStorage) ──
   const [excludeLabels, setExcludeLabels] = useState<string[]>(() => {
     try {
@@ -253,9 +254,10 @@ export default function App() {
       {fp.dataset && <nav className="project-sidebar" aria-label="Projects">
         <button className={project === 'count' ? 'active' : ''} onClick={() => setProject('count')}><LayoutDashboard/><span>Box &amp; Trùng lặp</span></button>
         <button className={project === 'anpr' ? 'active' : ''} onClick={() => setProject('anpr')}><CarFront/><span>ANPR biển số</span></button>
+        <button className={project === 'settings' ? 'active' : ''} onClick={() => setProject('settings')}><Settings/><span>{locale === 'vi' ? 'Cài đặt' : 'Settings'}</span></button>
       </nav>}
       <main className="app-main flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : <>
+        {project === 'settings' ? <SettingsPanel /> : project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : <>
         {/* Upload Zone (shown when no dataset loaded) */}
         <div hidden={Boolean(fp.dataset)}>
           <UploadZone
