@@ -9,6 +9,7 @@ const { safeStorage } = require('electron');
 const APP_ID = 'com.ndcli.cvatboxcounter';
 const APP_TITLE = 'Cvat Tools';
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+let savedDefaultTokens = {};
 
 function defaultToken() {
   try {
@@ -20,10 +21,26 @@ function defaultToken() {
 
 function defaultTokens() {
   try {
-    return require('./generated/default-tokens.cjs');
+    return { ...savedDefaultTokens, ...require('./generated/default-tokens.cjs') };
   } catch {
     const token = defaultToken();
-    return token ? { '*': token } : {};
+    return { ...savedDefaultTokens, ...(token ? { '*': token } : {}) };
+  }
+}
+
+async function restoreDefaultTokens() {
+  if (!safeStorage.isEncryptionAvailable()) return;
+  const filename = path.join(app.getPath('userData'), 'cvat-default-pats.bin');
+  try {
+    const parsed = JSON.parse(safeStorage.decryptString(await fs.readFile(filename)));
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      savedDefaultTokens = Object.fromEntries(Object.entries(parsed).filter(([, value]) => typeof value === 'string' && value));
+    }
+  } catch { /* A new machine has no stored server tokens yet. */ }
+  const tokens = defaultTokens();
+  if (Object.keys(tokens).length) {
+    await fs.mkdir(app.getPath('userData'), { recursive: true });
+    await fs.writeFile(filename, safeStorage.encryptString(JSON.stringify(tokens)));
   }
 }
 
@@ -284,7 +301,8 @@ function createWindow() {
 
 app.setAppUserModelId(APP_ID);
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await restoreDefaultTokens();
   Menu.setApplicationMenu(null);
   createWindow();
   setTimeout(() => void checkForPortableUpdate(), 8000);
