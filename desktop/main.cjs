@@ -178,6 +178,11 @@ ipcMain.handle('cvat:backup:open-folder', async () => {
 });
 
 let updateCheckRunning = false;
+ipcMain.handle('app:info', async () => {
+  let lastUpdate = null;
+  try { lastUpdate = JSON.parse((await fs.readFile(path.join(app.getPath('userData'), 'updates', 'status.json'), 'utf8')).replace(/^\uFEFF/, '')); } catch { /* No update has run yet. */ }
+  return { version: app.getVersion(), executablePath: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath, lastUpdate };
+});
 ipcMain.handle('app:update:check', () => checkForPortableUpdate(true));
 async function checkForPortableUpdate(manual = false) {
   if (updateCheckRunning) return { message: 'Đang kiểm tra cập nhật…' };
@@ -217,13 +222,21 @@ async function checkForPortableUpdate(manual = false) {
     await fs.writeFile(staged, binary);
     const quotePS = value => "'" + value.replace(/'/g, "''") + "'";
     const executableName = path.basename(process.execPath);
+    const helperDirectory = path.join(app.getPath('userData'), 'updates');
+    await fs.mkdir(helperDirectory, { recursive: true });
+    const statusPath = path.join(helperDirectory, 'status.json');
     const script = `$ErrorActionPreference='Stop'
 $target=${quotePS(target)}
 $staged=${quotePS(staged)}
 $backup="$target.backup-$([guid]::NewGuid().ToString('N'))"
 $payload=$staged
-$log=Join-Path (Split-Path $staged -Parent) 'update.log'
+$log=${quotePS(path.join(helperDirectory, 'last-update.log'))}
+$statusFile=${quotePS(statusPath)}
+function Write-UpdateStatus($state, $message) {
+  @{ state=$state; message=$message; fromVersion=${quotePS(app.getVersion())}; toVersion=${quotePS(latest)}; time=(Get-Date).ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath $statusFile -Encoding UTF8
+}
 try {
+  Write-UpdateStatus 'applying' 'Đang giải nén và cài bản vá.'
   ${isPortable ? '' : `
   $payload=Join-Path (Split-Path $staged -Parent) 'unpacked'
   Expand-Archive -LiteralPath $staged -DestinationPath $payload
@@ -235,17 +248,34 @@ try {
     try { Move-Item -LiteralPath $target -Destination $backup; break } catch { if ($attempt -eq 29) { throw }; Start-Sleep -Seconds 1 }
   }
   ${isPortable ? '' : `$payload=Join-Path $backup ${quotePS(path.relative(target, path.join(path.dirname(staged), 'unpacked')))}
-  $log=Join-Path $backup ${quotePS(path.relative(target, path.join(path.dirname(staged), 'update.log')))}`}
+  `}
   Move-Item -LiteralPath $payload -Destination $target
   Start-Process -FilePath ${isPortable ? '$target' : `(Join-Path $target ${quotePS(executableName)})`} -WorkingDirectory ${isPortable ? '(Split-Path $target -Parent)' : '$target'} -WindowStyle Normal
   'Update completed' | Set-Content -LiteralPath $log
+  Write-UpdateStatus 'success' 'Đã thay app và khởi động phiên bản mới.'
 } catch {
   $_ | Out-String | Set-Content -LiteralPath $log
+  Write-UpdateStatus 'failed' $_.Exception.Message
   if ((Test-Path -LiteralPath $backup) -and !(Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $backup -Destination $target }
   exit 1
 }`;
-    const encoded = Buffer.from(script, 'utf16le').toString('base64');
-    spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], { detached: true, stdio: 'ignore', windowsHide: true, cwd: os.tmpdir() }).unref();
+    const helperPath = path.join(helperDirectory, `apply-${Date.now()}.ps1`);
+    await fs.writeFile(helperPath, '\uFEFF' + script, 'utf8');
+    await fs.writeFile(statusPath, JSON.stringify({ state: 'scheduled', fromVersion: app.getVersion(), toVersion: latest, message: 'Đã tải bản vá; đang khởi động trình cập nhật.' }));
+    const batchPath = helperPath.replace(/\.ps1$/, '.cmd');
+    const launchLog = path.join(helperDirectory, 'helper-launch.log');
+    await fs.writeFile(batchPath, '@echo off\r\nstart "" /b "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "%CVAT_UPDATE_SCRIPT%" >>"%CVAT_UPDATE_LOG%" 2>&1\r\n', 'ascii');
+    const child = spawn('cmd.exe', ['/d', '/v:off', '/s', '/c', '""%CVAT_UPDATE_LAUNCHER%""'], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, cwd: os.tmpdir(), env: { ...process.env, CVAT_UPDATE_LAUNCHER: batchPath, CVAT_UPDATE_SCRIPT: helperPath, CVAT_UPDATE_LOG: launchLog } });
+    await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
+    child.unref();
+    let helperStarted = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const status = JSON.parse((await fs.readFile(statusPath, 'utf8')).replace(/^\uFEFF/, ''));
+      if (status.state === 'failed') throw new Error(status.message);
+      if (status.state !== 'scheduled') { helperStarted = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    if (!helperStarted) throw new Error(`Không khởi động được trình cập nhật. Nhật ký: ${launchLog}`);
     app.quit();
   } catch (error) { if (manual) throw error; }
   finally { updateCheckRunning = false; }

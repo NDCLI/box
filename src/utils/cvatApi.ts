@@ -27,6 +27,7 @@ interface DesktopCvatResponse {
 declare global {
   interface Window {
     cvatDesktop?: {
+      getAppInfo?: () => Promise<{ version: string; executablePath: string; lastUpdate: { state: string; message: string; fromVersion: string; toVersion: string } | null }>;
       checkForUpdates?: () => Promise<{ message: string }>;
       request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; jobId?: number; frameId?: string; method?: 'GET' | 'PATCH'; body?: unknown }) => Promise<DesktopCvatResponse>;
       getStoredToken: (serverUrl?: string) => Promise<string | null>;
