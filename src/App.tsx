@@ -251,11 +251,13 @@ export default function App() {
       <Header />
 
       <div className="workspace-shell flex-1">
-      {fp.dataset && <nav className="project-sidebar" aria-label="Projects">
-        <button className={project === 'count' ? 'active' : ''} onClick={() => setProject('count')}><LayoutDashboard/><span>Box &amp; Trùng lặp</span></button>
-        <button className={project === 'anpr' ? 'active' : ''} onClick={() => setProject('anpr')}><CarFront/><span>ANPR biển số</span></button>
-        <button className={project === 'settings' ? 'active' : ''} onClick={() => setProject('settings')}><Settings/><span>{locale === 'vi' ? 'Cài đặt' : 'Settings'}</span></button>
-      </nav>}
+      <nav className="project-sidebar" aria-label="Projects">
+        {fp.dataset && <>
+          <button className={project === 'count' ? 'active' : ''} onClick={() => setProject('count')}><LayoutDashboard/><span>Box &amp; Trùng lặp</span></button>
+          <button className={project === 'anpr' ? 'active' : ''} onClick={() => setProject('anpr')}><CarFront/><span>ANPR biển số</span></button>
+        </>}
+        <button className={project === 'settings' ? 'active' : ''} onClick={() => setProject(project === 'settings' ? 'count' : 'settings')}><Settings/><span>{locale === 'vi' ? 'Cài đặt' : 'Settings'}</span></button>
+      </nav>
       <main className="app-main flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {project === 'settings' ? <SettingsPanel /> : project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : <>
         {/* Upload Zone (shown when no dataset loaded) */}
