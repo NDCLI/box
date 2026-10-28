@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const physicalFs = require('original-fs').promises;
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
@@ -209,7 +210,7 @@ async function checkForPortableUpdate(manual = false) {
     if (choice.response !== 0) return { message: `Có phiên bản ${latest}. Bạn đã chọn cập nhật sau.` };
     const target = isPortable ? process.env.PORTABLE_EXECUTABLE_FILE : path.dirname(process.execPath);
     if (!path.isAbsolute(target) || target === path.parse(target).root) throw new Error('Thư mục app không hợp lệ.');
-    if (!isPortable) await fs.access(path.join(target, 'resources', 'app.asar'));
+    if (!isPortable) await physicalFs.access(path.join(target, 'resources', 'app.asar'));
     const updateDirectory = path.join(isPortable ? path.dirname(target) : target, '.updates');
     await fs.mkdir(updateDirectory, { recursive: true });
     const staged = path.join(await fs.mkdtemp(path.join(updateDirectory, 'patch-')), assetName);

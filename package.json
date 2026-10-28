@@ -3,7 +3,7 @@
   "description": "Read CVAT annotations, count bounding boxes, and inspect duplicate boxes.",
   "productName": "CVAT Box Counter & Duplicate Inspector",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.0.9",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
