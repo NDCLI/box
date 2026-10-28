@@ -163,7 +163,7 @@ let updateCheckRunning = false;
 ipcMain.handle('app:update:check', () => checkForPortableUpdate(true));
 async function checkForPortableUpdate(manual = false) {
   if (updateCheckRunning) return { message: 'Đang kiểm tra cập nhật…' };
-  if (process.platform !== 'win32' || !process.env.PORTABLE_EXECUTABLE_FILE || app.isPackaged === false) return { message: 'Kiểm tra cập nhật chỉ dùng trong bản Portable Windows.' };
+  if (process.platform !== 'win32' || !app.isPackaged || process.windowsStore) return { message: 'Kiểm tra cập nhật chỉ dùng trong bản Windows chạy độc lập.' };
   updateCheckRunning = true;
   try {
     const response = await fetch('https://api.github.com/repos/NDCLI/box/releases/latest', {
@@ -178,7 +178,9 @@ async function checkForPortableUpdate(manual = false) {
     if (latestParts.length !== 3 || latestParts.some(Number.isNaN)) return;
     const firstDifference = latestParts.findIndex((n, i) => n !== currentParts[i]);
     if (firstDifference < 0 || latestParts[firstDifference] < currentParts[firstDifference]) return { message: `Bạn đang dùng phiên bản mới nhất (${app.getVersion()}).` };
-    const asset = release.assets?.find(item => item.name === `CVAT-Box-Counter-${latest}-portable-win-x64.exe`);
+    const isPortable = Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
+    const assetName = isPortable ? `CVAT-Box-Counter-${latest}-portable-win-x64.exe` : `CVAT-Tools-${latest}-win-x64.zip`;
+    const asset = release.assets?.find(item => item.name === assetName);
     const checksum = release.assets?.find(item => item.name === `${asset?.name}.sha256`);
     if (!asset || !checksum || asset.size > 300 * 1024 * 1024) throw new Error('Bản phát hành chưa có đủ gói cập nhật và checksum.');
     const [binaryResponse, hashResponse] = await Promise.all([fetch(asset.browser_download_url), fetch(checksum.browser_download_url)]);
@@ -188,12 +190,40 @@ async function checkForPortableUpdate(manual = false) {
     if (binary.length !== asset.size || crypto.createHash('sha256').update(binary).digest('hex') !== expectedHash) throw new Error('Checksum bản cập nhật không khớp.');
     const choice = await dialog.showMessageBox({ type: 'info', buttons: ['Cập nhật ngay', 'Để sau'], defaultId: 0, cancelId: 1, message: `Có bản cập nhật CVAT Box Counter ${latest}.`, detail: 'Ứng dụng sẽ tải bản vá và khởi động lại. PAT đã lưu được giữ trên máy này.' });
     if (choice.response !== 0) return { message: `Có phiên bản ${latest}. Bạn đã chọn cập nhật sau.` };
-    const target = process.env.PORTABLE_EXECUTABLE_FILE;
-    const staged = path.join(app.getPath('temp'), `cvat-box-${latest}.exe`);
+    const target = isPortable ? process.env.PORTABLE_EXECUTABLE_FILE : path.dirname(process.execPath);
+    if (!path.isAbsolute(target) || target === path.parse(target).root) throw new Error('Thư mục app không hợp lệ.');
+    if (!isPortable) await fs.access(path.join(target, 'resources', 'app.asar'));
+    const staged = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'cvat-update-')), assetName);
     await fs.writeFile(staged, binary);
-    const script = `$ErrorActionPreference='Stop'; $target=${JSON.stringify(target)}; $staged=${JSON.stringify(staged)}; $pidToWait=${process.pid}; while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; $backup="$target.old"; try { Move-Item -LiteralPath $target -Destination $backup -Force; Move-Item -LiteralPath $staged -Destination $target -Force; Start-Process -FilePath $target; Remove-Item -LiteralPath $backup -Force } catch { if ((Test-Path -LiteralPath $backup) -and !(Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $backup -Destination $target -Force }; exit 1 }`;
+    const quotePS = value => "'" + value.replace(/'/g, "''") + "'";
+    const executableName = path.basename(process.execPath);
+    const script = `$ErrorActionPreference='Stop'
+$target=${quotePS(target)}
+$staged=${quotePS(staged)}
+$backup="$target.backup-$([guid]::NewGuid().ToString('N'))"
+$payload=$staged
+$log=Join-Path (Split-Path $staged -Parent) 'update.log'
+try {
+  ${isPortable ? '' : `
+  $payload=Join-Path (Split-Path $staged -Parent) 'unpacked'
+  Expand-Archive -LiteralPath $staged -DestinationPath $payload
+  if (!(Test-Path -LiteralPath (Join-Path $payload 'resources\\app.asar')) -or !(Test-Path -LiteralPath (Join-Path $payload ${quotePS(executableName)}))) { throw 'ZIP không chứa app hợp lệ.' }
+  `}
+  while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }
+  Start-Sleep -Seconds 2
+  for ($attempt=0; $attempt -lt 30; $attempt++) {
+    try { Move-Item -LiteralPath $target -Destination $backup; break } catch { if ($attempt -eq 29) { throw }; Start-Sleep -Seconds 1 }
+  }
+  Move-Item -LiteralPath $payload -Destination $target
+  Start-Process -FilePath ${isPortable ? '$target' : `(Join-Path $target ${quotePS(executableName)})`} -WorkingDirectory ${isPortable ? '(Split-Path $target -Parent)' : '$target'} -WindowStyle Normal
+  'Update completed' | Set-Content -LiteralPath $log
+} catch {
+  $_ | Out-String | Set-Content -LiteralPath $log
+  if ((Test-Path -LiteralPath $backup) -and !(Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $backup -Destination $target }
+  exit 1
+}`;
     const encoded = Buffer.from(script, 'utf16le').toString('base64');
-    spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], { detached: true, stdio: 'ignore', windowsHide: true, cwd: os.tmpdir() }).unref();
     app.quit();
   } catch (error) { if (manual) throw error; }
   finally { updateCheckRunning = false; }
