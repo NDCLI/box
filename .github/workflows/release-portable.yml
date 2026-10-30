@@ -27,9 +27,13 @@ jobs:
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          $file = "release/windows/CVAT-Box-Counter-$version-portable-win-x64.exe"
+          $file = "release/windows/CVAT-Tools-$version-portable-win-x64.exe"
           $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
           "$hash  $(Split-Path $file -Leaf)" | Set-Content "$file.sha256" -NoNewline
+          $legacyFile = "release/windows/CVAT-Box-Counter-$version-portable-win-x64.exe"
+          Copy-Item $file $legacyFile
+          $legacyHash = (Get-FileHash $legacyFile -Algorithm SHA256).Hash.ToLower()
+          "$legacyHash  $(Split-Path $legacyFile -Leaf)" | Set-Content "$legacyFile.sha256" -NoNewline
           $zip = "release/windows/CVAT-Tools-$version-win-x64.zip"
           Compress-Archive -Path release/windows/win-unpacked/* -DestinationPath $zip
           $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
@@ -39,5 +43,7 @@ jobs:
           files: |
             release/windows/CVAT-Box-Counter-*-portable-win-x64.exe
             release/windows/CVAT-Box-Counter-*-portable-win-x64.exe.sha256
+            release/windows/CVAT-Tools-*-portable-win-x64.exe
+            release/windows/CVAT-Tools-*-portable-win-x64.exe.sha256
             release/windows/CVAT-Tools-*-win-x64.zip
             release/windows/CVAT-Tools-*-win-x64.zip.sha256

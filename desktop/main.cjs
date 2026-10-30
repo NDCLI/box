@@ -203,7 +203,7 @@ async function checkForPortableUpdate(manual = false) {
     const firstDifference = latestParts.findIndex((n, i) => n !== currentParts[i]);
     if (firstDifference < 0 || latestParts[firstDifference] < currentParts[firstDifference]) return { message: `Bạn đang dùng phiên bản mới nhất (${app.getVersion()}).` };
     const isPortable = Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
-    const assetName = isPortable ? `CVAT-Box-Counter-${latest}-portable-win-x64.exe` : `CVAT-Tools-${latest}-win-x64.zip`;
+    const assetName = isPortable ? `CVAT-Tools-${latest}-portable-win-x64.exe` : `CVAT-Tools-${latest}-win-x64.zip`;
     const asset = release.assets?.find(item => item.name === assetName);
     const checksum = release.assets?.find(item => item.name === `${asset?.name}.sha256`);
     if (!asset || !checksum || asset.size > 300 * 1024 * 1024) throw new Error('Bản phát hành chưa có đủ gói cập nhật và checksum.');

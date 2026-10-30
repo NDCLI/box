@@ -29,7 +29,7 @@ nsis:
   createStartMenuShortcut: true
   artifactName: CVAT-Box-Counter-Setup-${version}-win-${arch}.${ext}
 portable:
-  artifactName: CVAT-Box-Counter-${version}-portable-win-${arch}.${ext}
+  artifactName: CVAT-Tools-${version}-portable-win-${arch}.${ext}
 appx:
   identityName: cvattools.CVATTools
   publisher: CN=63147F28-03C4-435D-B5F4-AAD25100D8FD
