@@ -1,5 +1,5 @@
 appId: com.ndcli.cvatboxcounter
-productName: CVAT Box Counter & Duplicate Inspector
+productName: CVAT Tools
 asar: true
 toolsets:
   winCodeSign: "1.1.0"

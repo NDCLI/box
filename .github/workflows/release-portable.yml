@@ -35,6 +35,7 @@ jobs:
           $legacyHash = (Get-FileHash $legacyFile -Algorithm SHA256).Hash.ToLower()
           "$legacyHash  $(Split-Path $legacyFile -Leaf)" | Set-Content "$legacyFile.sha256" -NoNewline
           $zip = "release/windows/CVAT-Tools-$version-win-x64.zip"
+          Copy-Item "release/windows/win-unpacked/CVAT Tools.exe" "release/windows/win-unpacked/CVAT Box Counter & Duplicate Inspector.exe"
           Compress-Archive -Path release/windows/win-unpacked/* -DestinationPath $zip
           $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$zipHash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256" -NoNewline

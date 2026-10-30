@@ -1,9 +1,9 @@
 {
   "name": "cvat-duplicate-box-detector",
   "description": "Read CVAT annotations, count bounding boxes, and inspect duplicate boxes.",
-  "productName": "CVAT Box Counter & Duplicate Inspector",
+  "productName": "CVAT Tools",
   "private": true,
-  "version": "1.0.15",
+  "version": "1.0.16",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

@@ -248,6 +248,7 @@ try {
   Move-Item -LiteralPath $payload -Destination $target` : `Copy-Item -Path (Join-Path $payload '*') -Destination $target -Recurse -Force`}
   Remove-Item -LiteralPath (Split-Path $staged -Parent) -Recurse -Force
   Start-Process -FilePath ${isPortable ? '$target' : `(Join-Path $target ${quotePS(executableName)})`} -WorkingDirectory ${isPortable ? '(Split-Path $target -Parent)' : '$target'} -WindowStyle Normal
+  ${isPortable ? '' : `Remove-Item -LiteralPath (Join-Path $target 'CVAT Box Counter & Duplicate Inspector.exe') -Force -ErrorAction SilentlyContinue`}
   'Update completed' | Set-Content -LiteralPath $log
   Write-UpdateStatus 'success' 'Đã thay app và khởi động phiên bản mới.'
   Get-ChildItem -LiteralPath (Split-Path $target -Parent) -Filter ((Split-Path $target -Leaf) + '.backup-*') -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
@@ -335,6 +336,24 @@ app.setAppUserModelId(APP_ID);
 
 app.whenReady().then(async () => {
   await restoreDefaultTokens();
+  if (app.isPackaged && process.platform === 'win32') {
+    const preferredExecutable = path.join(path.dirname(process.execPath), 'CVAT Tools.exe');
+    if (path.resolve(process.execPath).toLowerCase() !== path.resolve(preferredExecutable).toLowerCase() && await physicalFs.access(preferredExecutable).then(() => true, () => false)) {
+      const legacyExecutable = process.execPath;
+      const child = spawn(preferredExecutable, process.argv.slice(1), { detached: true, stdio: 'ignore', windowsHide: false, cwd: path.dirname(preferredExecutable) });
+      child.unref();
+      const helperDirectory = path.join(app.getPath('userData'), 'updates');
+      await fs.mkdir(helperDirectory, { recursive: true });
+      const helperPath = path.join(helperDirectory, `remove-legacy-exe-${Date.now()}.ps1`);
+      const batchPath = helperPath.replace(/\.ps1$/, '.cmd');
+      await fs.writeFile(helperPath, `\uFEFF$ErrorActionPreference='SilentlyContinue'\nwhile (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }\nStart-Sleep -Seconds 2\nRemove-Item -LiteralPath $env:CVAT_LEGACY_EXE -Force\n`, 'utf8');
+      await fs.writeFile(batchPath, '@echo off\r\nstart "" /b "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "%CVAT_REMOVE_SCRIPT%"\r\n', 'ascii');
+      const remover = spawn('cmd.exe', ['/d', '/v:off', '/s', '/c', '""%CVAT_REMOVE_LAUNCHER%""'], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, cwd: os.tmpdir(), env: { ...process.env, CVAT_REMOVE_LAUNCHER: batchPath, CVAT_REMOVE_SCRIPT: helperPath, CVAT_LEGACY_EXE: legacyExecutable } });
+      remover.unref();
+      app.quit();
+      return;
+    }
+  }
   Menu.setApplicationMenu(null);
   createWindow();
   setTimeout(() => void checkForPortableUpdate(), 8000);
