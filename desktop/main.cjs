@@ -229,7 +229,6 @@ async function checkForPortableUpdate(manual = false) {
     const script = `$ErrorActionPreference='Stop'
 $target=${quotePS(target)}
 $staged=${quotePS(staged)}
-$backup="$target.backup-$([guid]::NewGuid().ToString('N'))"
 $payload=$staged
 $log=${quotePS(path.join(helperDirectory, 'last-update.log'))}
 $statusFile=${quotePS(statusPath)}
@@ -245,19 +244,16 @@ try {
   `}
   while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }
   Start-Sleep -Seconds 2
-  for ($attempt=0; $attempt -lt 30; $attempt++) {
-    try { Move-Item -LiteralPath $target -Destination $backup; break } catch { if ($attempt -eq 29) { throw }; Start-Sleep -Seconds 1 }
-  }
-  ${isPortable ? '' : `$payload=Join-Path $backup ${quotePS(path.relative(target, path.join(path.dirname(staged), 'unpacked')))}
-  `}
-  Move-Item -LiteralPath $payload -Destination $target
+  ${isPortable ? `Remove-Item -LiteralPath $target -Force
+  Move-Item -LiteralPath $payload -Destination $target` : `Copy-Item -Path (Join-Path $payload '*') -Destination $target -Recurse -Force`}
+  Remove-Item -LiteralPath (Split-Path $staged -Parent) -Recurse -Force
   Start-Process -FilePath ${isPortable ? '$target' : `(Join-Path $target ${quotePS(executableName)})`} -WorkingDirectory ${isPortable ? '(Split-Path $target -Parent)' : '$target'} -WindowStyle Normal
   'Update completed' | Set-Content -LiteralPath $log
   Write-UpdateStatus 'success' 'Đã thay app và khởi động phiên bản mới.'
+  Get-ChildItem -LiteralPath (Split-Path $target -Parent) -Filter ((Split-Path $target -Leaf) + '.backup-*') -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
   $_ | Out-String | Set-Content -LiteralPath $log
   Write-UpdateStatus 'failed' $_.Exception.Message
-  if ((Test-Path -LiteralPath $backup) -and !(Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $backup -Destination $target }
   exit 1
 }`;
     const helperPath = path.join(helperDirectory, `apply-${Date.now()}.ps1`);
