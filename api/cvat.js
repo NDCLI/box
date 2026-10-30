@@ -39,6 +39,8 @@ export default async function handler(req, res) {
     upstreamPath = '/tasks?page_size=1000';
   } else if (resource === 'task' && taskId) {
     upstreamPath = `/tasks/${taskId}`;
+  } else if (resource === 'meta' && taskId) {
+    upstreamPath = `/tasks/${taskId}/data/meta`;
   } else if (resource === 'annotations' && taskId) {
     upstreamPath = `/tasks/${taskId}/annotations`;
   } else if (resource === 'jobs' && taskId) {

@@ -16,7 +16,7 @@ export interface ElectronCvatConnection extends Omit<DirectCvatConnection, 'mode
 
 export type CvatConnection = DirectCvatConnection | VercelCvatConnection | ElectronCvatConnection;
 
-type CvatResource = 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobAnnotations' | 'jobAnnotationsDelete' | 'jobFrame' | 'labels';
+type CvatResource = 'meta' | 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobAnnotations' | 'jobAnnotationsDelete' | 'jobFrame' | 'labels';
 
 interface DesktopCvatResponse {
   status: number;
@@ -153,6 +153,8 @@ function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame
   if (jobDeleteMatch) return { resource: 'jobAnnotationsDelete', jobId: Number(jobDeleteMatch[1]) };
   const jobMatch = path.match(/^\/jobs\/(\d+)(\/annotations)?$/);
   if (jobMatch) return { resource: jobMatch[2] ? 'jobAnnotations' : 'job', jobId: Number(jobMatch[1]) };
+  const metaMatch = path.match(/^\/tasks\/(\d+)\/data\/meta$/);
+  if (metaMatch) return { resource: 'meta', taskId: Number(metaMatch[1]) };
   const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
   if (!match) throw new Error('Yêu cầu CVAT không được hỗ trợ.');
   return { resource: match[2] ? 'annotations' : 'task', taskId: Number(match[1]) };
@@ -276,24 +278,36 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations, fram
   };
 }
 
+interface CvatImageMeta { frames: { name: string; width: number; height: number }[] }
+function applyImageNames(dataset: CVATDataset, meta: CvatImageMeta): CVATDataset {
+  for (const frame of dataset.frames) {
+    const image = meta.frames[Number(frame.id)];
+    frame.name = image?.name || '';
+    if (image) { frame.width = image.width; frame.height = image.height; }
+  }
+  return dataset;
+}
+
 export async function loadCvatTaskDataset(connection: CvatConnection, taskId: number): Promise<CVATDataset> {
-  const [task, annotations, labels] = await Promise.all([
+  const [task, annotations, labels, meta] = await Promise.all([
     cvatFetch<CvatTask>(connection, `/tasks/${taskId}`),
     cvatFetch<CvatAnnotations>(connection, `/tasks/${taskId}/annotations`),
     listCvatTaskLabels(connection, taskId),
+    cvatFetch<CvatImageMeta>(connection, `/tasks/${taskId}/data/meta`),
   ]);
-  return { ...toCvatDataset({ ...task, labels: labels.length > 0 ? labels : task.labels }, annotations), source: 'cvat' };
+  return { ...applyImageNames(toCvatDataset({ ...task, labels: labels.length > 0 ? labels : task.labels }, annotations), meta), source: 'cvat' };
 }
 
 export async function loadCvatJobDataset(connection: CvatConnection, taskId: number, jobId: number): Promise<CVATDataset> {
-  const [task, job, annotations, labels] = await Promise.all([
+  const [task, job, annotations, labels, meta] = await Promise.all([
     cvatFetch<CvatTask>(connection, `/tasks/${taskId}`),
     cvatFetch<CvatJob>(connection, `/jobs/${jobId}`),
     cvatFetch<CvatAnnotations>(connection, `/jobs/${jobId}/annotations`),
     listCvatTaskLabels(connection, taskId),
+    cvatFetch<CvatImageMeta>(connection, `/tasks/${taskId}/data/meta`),
   ]);
   return {
-    ...toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}`, labels: labels.length > 0 ? labels : task.labels }, annotations, job),
+    ...applyImageNames(toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}`, labels: labels.length > 0 ? labels : task.labels }, annotations, job), meta),
     source: 'cvat',
     cvatContext: { serverUrl: connection.mode === 'electron' || connection.mode === 'direct' ? connection.serverUrl : '', taskId, jobId },
   };
@@ -413,6 +427,8 @@ function proxyUrl(path: string): string {
   if (labelsMatch) return `/api/cvat?resource=labels&taskId=${labelsMatch[1]}`;
   const jobMatch = path.match(/^\/jobs\/(\d+)(\/annotations)?$/);
   if (jobMatch) return `/api/cvat?resource=${jobMatch[2] ? 'jobAnnotations' : 'job'}&jobId=${jobMatch[1]}`;
+  const metaMatch = path.match(/^\/tasks\/(\d+)\/data\/meta$/);
+  if (metaMatch) return `/api/cvat?resource=meta&taskId=${metaMatch[1]}`;
   const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
   if (!match) throw new Error('Yêu cầu CVAT không được hỗ trợ.');
   const resource = match[2] ? 'annotations' : 'task';

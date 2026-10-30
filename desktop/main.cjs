@@ -108,6 +108,7 @@ function cvatPath({ resource, taskId, jobId, frameId }) {
   if (resource === 'jobFrame' && Number.isInteger(job) && job > 0 && /^\d+$/.test(String(frameId))) return `/jobs/${job}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
   if (!Number.isInteger(id) || id < 1) throw new Error('Task ID không hợp lệ.');
   if (resource === 'task') return `/tasks/${id}`;
+  if (resource === 'meta') return `/tasks/${id}/data/meta`;
   if (resource === 'annotations') return `/tasks/${id}/annotations`;
   if (resource === 'frame' && /^\d+$/.test(String(frameId))) {
     return `/tasks/${id}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
