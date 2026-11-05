@@ -6,6 +6,8 @@ import { LocaleProvider } from './i18n/LocaleProvider';
 import { listCvatJobs, listCvatTasks, loadCvatJobDataset, loadCvatTaskDataset } from './utils/cvatApi';
 import type { CVATDataset } from './types';
 
+vi.mock('./components/ImageViewProject', () => ({ default: () => <section aria-label="ImageView">Shared viewer</section> }));
+
 vi.mock('./utils/cvatApi', () => ({
   listCvatTasks: vi.fn(),
   listCvatJobs: vi.fn(),
@@ -56,6 +58,30 @@ describe('CVAT Job session', () => {
     await click('Lấy danh sách Task');
     await click('Mở Job');
   }
+
+  it('opens data once on Home, then reveals Box, ANPR and ImageView', async () => {
+    expect(container.querySelector('.project-sidebar')?.textContent).not.toContain('ImageView');
+    expect(container.querySelector('.project-sidebar')?.textContent).not.toContain('ANPR');
+    await openJob();
+    const labels = [...container.querySelectorAll('.project-sidebar button')].map(button => button.textContent?.trim());
+    expect(labels).toEqual(expect.arrayContaining(['Box & Trùng lặp', 'ANPR biển số', 'ImageView']));
+  });
+
+  it('shares one source picker and one close action across all three tools', async () => {
+    await openJob();
+    await click('ANPR biển số');
+    expect(container.querySelector('.app-file-bar')).not.toBeNull();
+    expect(container.querySelectorAll('.app-upload-stage')).toHaveLength(1);
+    expect(container.querySelector('[data-testid="shared-source"]')?.hasAttribute('hidden')).toBe(true);
+    await click('ImageView');
+    expect(container.querySelectorAll('.app-file-bar')).toHaveLength(1);
+    expect(container.querySelector('[aria-label="ImageView"] input')).toBeNull();
+    expect(listCvatTasks).toHaveBeenCalledTimes(1);
+    expect(loadCvatJobDataset).toHaveBeenCalledTimes(1);
+    await click('Đóng Job');
+    expect(container.querySelector('.project-sidebar')?.textContent).not.toContain('ImageView');
+    expect(container.querySelector('[data-testid="shared-source"]')?.hasAttribute('hidden')).toBe(false);
+  });
 
   it('keeps loaded Task/Job choices after closing and opens another Job without listing again', async () => {
     await openJob();

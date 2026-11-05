@@ -9,6 +9,8 @@ files:
   - dist-desktop/**/*
   - desktop/main.cjs
   - desktop/preload.cjs
+  - desktop/imageview-service.cjs
+  - desktop/imageview-cache.cjs
   - desktop/generated/default-token.cjs
   - desktop/generated/default-tokens.cjs
   - desktop/assets/**/*

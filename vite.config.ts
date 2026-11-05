@@ -1,10 +1,11 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import solid from 'vite-plugin-solid';
 import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig(() => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [react({ exclude: /imageview\/solid/ }), solid({ include: /imageview\/solid\/.*\.jsx$/ }), tailwindcss()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),

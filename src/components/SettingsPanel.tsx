@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocale } from '../i18n/LocaleProvider';
+import ImageViewCacheSettings from './ImageViewCacheSettings';
 
 export default function SettingsPanel() {
   const { locale, setLocale } = useLocale();
@@ -18,6 +19,7 @@ export default function SettingsPanel() {
   };
   return <section className="app-panel rounded-2xl border p-6 space-y-6">
     <h2 className="text-xl font-bold">{locale === 'vi' ? 'Cài đặt' : 'Settings'}</h2>
+    <ImageViewCacheSettings />
     <div className="space-y-2">
       <p className="font-semibold">{locale === 'vi' ? 'Phiên bản đang chạy' : 'Running version'}: <span className="font-mono text-blue-400">{info?.version || '—'}</span></p>
       {info && <p className="text-xs text-slate-400 break-all">{info.executablePath}</p>}

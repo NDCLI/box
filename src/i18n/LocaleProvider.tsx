@@ -5,6 +5,18 @@ export type Locale = 'en' | 'vi';
 const STORAGE_KEY = 'cvat-tools-locale';
 
 const english: Record<string, string> = {
+  'Mở rộng thanh bên': 'Expand sidebar',
+  'Thu gọn thanh bên': 'Collapse sidebar',
+  'Trang chính': 'Home',
+  'Cài đặt': 'Settings',
+  'Personal Access Token (chỉ cần quyền đọc)': 'Personal Access Token (read access only)',
+  'Sẵn sàng': 'Ready',
+  'Đang tải ảnh…': 'Loading image…',
+  'Đang tải: ': 'Loading: ',
+  'Vừa khung': 'Fit',
+  'Kích thước': 'Resolution',
+  'Phím tắt': 'Shortcuts',
+  'Thử lại': 'Retry',
   'Kiểm tra annotation nhanh, trực quan và bảo mật': 'Fast, visual, and secure annotation checks',
   'Đang đọc và xử lý tệp dữ liệu...': 'Reading and processing the data file...',
   'Quá trình này có thể mất vài giây tùy thuộc vào dung lượng file.': 'This may take a few seconds depending on the file size.',

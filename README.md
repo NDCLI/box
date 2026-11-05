@@ -15,6 +15,8 @@ npm run dev
 
 ## Chạy ứng dụng Windows
 
+Từ bản 1.1.0, Trang chính chọn một nguồn CVAT/XML/ZIP dùng chung. Sau khi mở dữ liệu, ba tab Box & Trùng lặp, ANPR biển số và ImageView cùng dùng phiên đó. Thanh tải lại/đóng nguồn nằm chung phía trên. Xem [hướng dẫn ImageView](docs/IMAGEVIEW_IMPLEMENTATION.md).
+
 Yêu cầu: Windows x64 và Node.js.
 
 ```bash

@@ -6,8 +6,12 @@ import {
 } from 'lucide-react';
 import { type CVATDataset } from '../types';
 import { type Entry } from '@zip.js/zip.js';
+import type { JobCacheProgress } from '../utils/cvatApi';
+import { useLocale } from '../i18n/LocaleProvider';
 
 interface FileInfoBarProps {
+  jobImageCache?: JobCacheProgress | null;
+  compact?: boolean;
   file: File | null;
   dataset: CVATDataset;
   zipEntries: Entry[] | null;
@@ -33,28 +37,36 @@ export default function FileInfoBar({
   isRefreshingJob = false,
   cvatScope = 'Job',
   onOpenBackupFolder,
+  compact = false,
+  jobImageCache,
 }: FileInfoBarProps) {
+  const { locale } = useLocale();
   return (
-    <div className="app-panel app-file-bar bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div className="flex items-center space-x-3.5">
-        <div className="p-3 bg-red-50 rounded-xl text-red-500">
+    <div className={`app-panel app-file-bar ${compact ? 'app-file-bar-compact' : ''} bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4`}>
+      <div className="file-bar-identity flex items-center space-x-3.5">
+        <div className="file-bar-icon p-3 bg-red-50 rounded-xl text-red-500">
           {zipEntries ? <FileArchive className="w-6 h-6" /> : <FileCode className="w-6 h-6" />}
         </div>
-        <div>
+        <div className="file-bar-copy">
           <div className="flex items-center space-x-2">
-            <span className="font-bold text-slate-900 break-all">{file?.name}</span>
-            <span className="text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-md font-medium shrink-0">
+            <span className="file-bar-title font-bold text-slate-900 break-all" title={dataset.taskName || file?.name}>{compact ? dataset.taskName || file?.name : file?.name}</span>
+            {!compact && <span className="text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-md font-medium shrink-0">
               {(file ? file.size / 1024 / 1024 : 0).toFixed(2)} MB
-            </span>
+            </span>}
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          {!compact && <p className="text-xs text-slate-500 mt-0.5">
             Kiểu CVAT: <strong className="text-slate-700">{dataset.type === 'images' ? 'Bộ sưu tập ảnh (Images)' : 'Chuỗi khung hình video (Tracks)'}</strong>
             {dataset.taskName && <> | Tên nhiệm vụ: <strong className="text-slate-700">{dataset.taskName}</strong></>}
-          </p>
+          </p>}
         </div>
       </div>
 
-      <div className="flex items-center space-x-3 self-end md:self-auto">
+      <div className="file-bar-actions flex items-center space-x-3 self-end md:self-auto">
+        {jobImageCache && <span data-testid="job-image-cache" data-state={jobImageCache.state} role="status"
+          title={jobImageCache.message || (locale === 'vi' ? 'Tự động lưu ảnh Job vào cache ổ đĩa' : 'Automatically caching all Job images')}
+          className={`text-[11px] whitespace-nowrap ${jobImageCache.state === 'error' ? 'text-amber-400' : 'text-slate-400'}`}>
+          {jobImageCache.state === 'complete' ? '✓ Cache' : jobImageCache.state === 'error' ? (locale === 'vi' ? 'Lỗi cache' : 'Cache error') : jobImageCache.state === 'stopped' ? (locale === 'vi' ? 'Cache đã dừng' : 'Cache stopped') : (locale === 'vi' ? 'Lưu cache' : 'Caching')} {jobImageCache.completed}/{jobImageCache.total}
+        </span>}
         {/* XML file selector if inside ZIP */}
         {zipEntries && xmlFilesInZip.length > 1 && (
           <div className="flex items-center space-x-2">

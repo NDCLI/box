@@ -6,6 +6,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { safeStorage } = require('electron');
+const imageView = require('./imageview-service.cjs').registerImageView({ ipcMain, app, path, tokenForServer });
 
 const APP_ID = 'com.ndcli.cvatboxcounter';
 const APP_TITLE = 'Cvat Tools';
@@ -51,8 +52,9 @@ function tokenForServer(serverUrl) {
   return tokens[normalized] || tokens['*'] || '';
 }
 
-function storedTokenPath() {
-  return path.join(app.getPath('userData'), 'cvat-pat.bin');
+function storedTokenPath(serverUrl) {
+  const suffix = serverUrl ? `-${crypto.createHash('sha256').update(cvatApiBaseUrl(serverUrl)).digest('hex')}` : '';
+  return path.join(app.getPath('userData'), `cvat-pat${suffix}.bin`);
 }
 
 function encryptToken(token) {
@@ -66,25 +68,25 @@ function decryptToken(value) {
 ipcMain.handle('cvat:token:get', async (_event, serverUrl) => {
   if (!safeStorage.isEncryptionAvailable()) return null;
   try {
-    return decryptToken(await fs.readFile(storedTokenPath()));
+    return decryptToken(await fs.readFile(storedTokenPath(serverUrl)));
   } catch {
     const fallback = tokenForServer(serverUrl);
     if (!fallback) return null;
-    await fs.mkdir(path.dirname(storedTokenPath()), { recursive: true });
-    await fs.writeFile(storedTokenPath(), encryptToken(fallback));
+    await fs.mkdir(path.dirname(storedTokenPath(serverUrl)), { recursive: true });
+    await fs.writeFile(storedTokenPath(serverUrl), encryptToken(fallback));
     return fallback;
   }
 });
 
-ipcMain.handle('cvat:token:set', async (_event, value) => {
+ipcMain.handle('cvat:token:set', async (_event, value, serverUrl) => {
   if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows không hỗ trợ mã hóa token trên thiết bị này.');
   const token = typeof value === 'string' ? value.trim() : '';
   if (!token) {
-    await fs.rm(storedTokenPath(), { force: true });
+    await fs.rm(storedTokenPath(serverUrl), { force: true });
     return;
   }
-  await fs.mkdir(path.dirname(storedTokenPath()), { recursive: true });
-  await fs.writeFile(storedTokenPath(), encryptToken(token));
+  await fs.mkdir(path.dirname(storedTokenPath(serverUrl)), { recursive: true });
+  await fs.writeFile(storedTokenPath(serverUrl), encryptToken(token));
 });
 
 ipcMain.handle('cvat:token:has-default', () => Object.keys(defaultTokens()).length > 0);
@@ -103,6 +105,7 @@ function cvatPath({ resource, taskId, jobId, frameId }) {
   if (resource === 'labels' && Number.isInteger(id) && id > 0) return `/labels?task_id=${id}&page_size=1000`;
   const job = Number(jobId);
   if (resource === 'job' && Number.isInteger(job) && job > 0) return `/jobs/${job}`;
+  if (resource === 'jobMeta' && Number.isInteger(job) && job > 0) return `/jobs/${job}/data/meta`;
   if (resource === 'jobAnnotations' && Number.isInteger(job) && job > 0) return `/jobs/${job}/annotations`;
   if (resource === 'jobAnnotationsDelete' && Number.isInteger(job) && job > 0) return `/jobs/${job}/annotations?action=delete`;
   if (resource === 'jobFrame' && Number.isInteger(job) && job > 0 && /^\d+$/.test(String(frameId))) return `/jobs/${job}/data?type=frame&number=${encodeURIComponent(frameId)}&quality=compressed`;
@@ -131,6 +134,10 @@ ipcMain.handle('cvat:request', async (_event, request) => {
   }
   if (method === 'GET' && resource === 'jobAnnotationsDelete') {
     throw new Error('Endpoint xóa Shape chỉ nhận PATCH.');
+  }
+  if (method === 'GET' && (resource === 'frame' || resource === 'jobFrame')) {
+    const cached = await imageView.frameForRequest(_event.sender.id, { ...request, token });
+    if (cached) return { status: 200, contentType: cached.contentType, data: cached.data };
   }
   const response = await fetch(`${cvatApiBaseUrl(request.serverUrl)}${cvatPath(request)}`, {
     method,

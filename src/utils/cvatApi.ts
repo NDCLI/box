@@ -1,4 +1,6 @@
 import type { CVATAttribute, CVATBox, CVATDataset, CVATFrameData, CvatShapePayload } from '../types';
+import type { ViewerPayload, ViewerMeta } from '../imageview/metadata';
+import { mapViewerPayload } from '../imageview/metadata';
 
 export interface DirectCvatConnection {
   mode: 'direct';
@@ -16,12 +18,20 @@ export interface ElectronCvatConnection extends Omit<DirectCvatConnection, 'mode
 
 export type CvatConnection = DirectCvatConnection | VercelCvatConnection | ElectronCvatConnection;
 
-type CvatResource = 'meta' | 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobAnnotations' | 'jobAnnotationsDelete' | 'jobFrame' | 'labels';
+type CvatResource = 'meta' | 'tasks' | 'task' | 'annotations' | 'frame' | 'jobs' | 'job' | 'jobMeta' | 'jobAnnotations' | 'jobAnnotationsDelete' | 'jobFrame' | 'labels';
 
 interface DesktopCvatResponse {
   status: number;
   contentType?: string;
   data: unknown;
+}
+
+export interface JobCacheProgress {
+  state: 'idle' | 'running' | 'complete' | 'stopped' | 'error';
+  total: number;
+  completed: number;
+  failed: number;
+  message: string;
 }
 
 declare global {
@@ -31,10 +41,17 @@ declare global {
       checkForUpdates?: () => Promise<{ message: string }>;
       request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; jobId?: number; frameId?: string; method?: 'GET' | 'PATCH'; body?: unknown }) => Promise<DesktopCvatResponse>;
       getStoredToken: (serverUrl?: string) => Promise<string | null>;
-      saveToken: (token: string) => Promise<void>;
+      saveToken: (token: string, serverUrl?: string) => Promise<void>;
       hasDefaultToken: () => Promise<boolean>;
       saveBackup?: (payload: unknown) => Promise<{ path: string }>;
       openBackupFolder?: () => Promise<void>;
+      viewerOpen?: (request: { serverUrl: string; token: string; taskId: number; jobId?: number; revision: string; frames: number[] }) => Promise<{ sessionId: string }>;
+      viewerFrame?: (request: { sessionId: string; requestId: string; frameId: number; priority: boolean }) => Promise<{ data: Uint8Array; contentType: string }>;
+      viewerCancel?: (request: { sessionId: string; requestId: string }) => Promise<void>;
+      viewerClose?: (sessionId: string) => Promise<void>;
+      viewerCache?: (request: { action: 'info' | 'clear' | 'configure'; limitGB?: number }) => Promise<{ bytes: number; entries: number; limitGB: number }>;
+      viewerPreload?: (sessionId: string) => Promise<JobCacheProgress>;
+      viewerPreloadStatus?: (sessionId: string) => Promise<JobCacheProgress>;
     };
   }
 }
@@ -63,6 +80,8 @@ interface CvatLabel {
 }
 
 interface CvatTask extends CvatTaskSummary {
+  mode?: string;
+  updated_date?: string;
   size?: number;
   labels?: unknown;
 }
@@ -144,6 +163,8 @@ async function cvatFetch<T>(connection: CvatConnection, path: string, options?: 
 }
 
 function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame' | 'jobFrame'>; taskId?: number; jobId?: number } {
+  const jobMetaMatch = path.match(/^\/jobs\/(\d+)\/data\/meta$/);
+  if (jobMetaMatch) return { resource: 'jobMeta', jobId: Number(jobMetaMatch[1]) };
   if (path === '/tasks?page_size=1000') return { resource: 'tasks' };
   const jobsMatch = path.match(/^\/jobs\?task_id=(\d+)&page_size=1000$/);
   if (jobsMatch) return { resource: 'jobs', taskId: Number(jobsMatch[1]) };
@@ -158,6 +179,24 @@ function requestFromPath(path: string): { resource: Exclude<CvatResource, 'frame
   const match = path.match(/^\/tasks\/(\d+)(\/annotations)?$/);
   if (!match) throw new Error('Yêu cầu CVAT không được hỗ trợ.');
   return { resource: match[2] ? 'annotations' : 'task', taskId: Number(match[1]) };
+}
+
+export async function loadCvatViewerPayload(connection: CvatConnection, taskId: number, jobId?: number): Promise<ViewerPayload> {
+  const [task, meta, labels, annotations, job, jobMeta] = await Promise.all([
+    cvatFetch<ViewerPayload['task']>(connection, `/tasks/${taskId}`),
+    cvatFetch<ViewerMeta>(connection, `/tasks/${taskId}/data/meta`),
+    listCvatTaskLabels(connection, taskId),
+    cvatFetch<ViewerPayload['annotations']>(connection, jobId ? `/jobs/${jobId}/annotations` : `/tasks/${taskId}/annotations`),
+    jobId ? cvatFetch<NonNullable<ViewerPayload['job']>>(connection, `/jobs/${jobId}`) : undefined,
+    jobId ? cvatFetch<ViewerMeta>(connection, `/jobs/${jobId}/data/meta`) : undefined,
+  ]);
+  return { task, meta, labels, annotations, job, jobMeta };
+}
+
+export async function getCvatJobTaskId(connection: CvatConnection, jobId: number): Promise<number> {
+  const job = await cvatFetch<CvatJob>(connection, `/jobs/${jobId}`);
+  if (!Number.isSafeInteger(job.task_id) || job.task_id! < 1) throw new Error('Job không có Task ID hợp lệ.');
+  return job.task_id!;
 }
 
 async function requestDesktop(
@@ -278,13 +317,15 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations, fram
   };
 }
 
-interface CvatImageMeta { frames: { name: string; width: number; height: number }[] }
-function applyImageNames(dataset: CVATDataset, meta: CvatImageMeta): CVATDataset {
+type CvatImageMeta = ViewerMeta;
+function applyViewerMetadata(dataset: CVATDataset, payload: ViewerPayload): CVATDataset {
+  const records = new Map(mapViewerPayload(payload).images.map(image => [image.key, image]));
+  dataset.frames = dataset.frames.filter(frame => records.has(frame.id));
   for (const frame of dataset.frames) {
-    const image = meta.frames[Number(frame.id)];
-    frame.name = image?.name || '';
-    if (image) { frame.width = image.width; frame.height = image.height; }
+    const image = records.get(frame.id)!;
+    frame.name = image.name; frame.width = image.width; frame.height = image.height;
   }
+  dataset.viewerPayload = payload;
   return dataset;
 }
 
@@ -295,20 +336,23 @@ export async function loadCvatTaskDataset(connection: CvatConnection, taskId: nu
     listCvatTaskLabels(connection, taskId),
     cvatFetch<CvatImageMeta>(connection, `/tasks/${taskId}/data/meta`),
   ]);
-  return { ...applyImageNames(toCvatDataset({ ...task, labels: labels.length > 0 ? labels : task.labels }, annotations), meta), source: 'cvat' };
+  return { ...applyViewerMetadata(toCvatDataset({ ...task, labels: labels.length > 0 ? labels : task.labels }, annotations), { task, meta, labels, annotations }), source: 'cvat' };
 }
 
 export async function loadCvatJobDataset(connection: CvatConnection, taskId: number, jobId: number): Promise<CVATDataset> {
-  const [task, job, annotations, labels, meta] = await Promise.all([
+  const [task, job, annotations, labels, meta, jobMeta] = await Promise.all([
     cvatFetch<CvatTask>(connection, `/tasks/${taskId}`),
     cvatFetch<CvatJob>(connection, `/jobs/${jobId}`),
     cvatFetch<CvatAnnotations>(connection, `/jobs/${jobId}/annotations`),
     listCvatTaskLabels(connection, taskId),
     cvatFetch<CvatImageMeta>(connection, `/tasks/${taskId}/data/meta`),
+    connection.mode === 'electron' ? cvatFetch<ViewerMeta>(connection, `/jobs/${jobId}/data/meta`) : undefined,
   ]);
+  if (job.task_id !== undefined && job.task_id !== taskId) throw new Error('Job không thuộc Task đã chọn.');
   return {
-    ...applyImageNames(toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}`, labels: labels.length > 0 ? labels : task.labels }, annotations, job), meta),
+    ...applyViewerMetadata(toCvatDataset({ ...task, name: `${task.name} — Job #${jobId}`, labels: labels.length > 0 ? labels : task.labels }, annotations, job), { task, meta, labels, annotations, job: job as NonNullable<ViewerPayload['job']>, jobMeta }),
     source: 'cvat',
+    viewerPayload: { task, meta, labels, annotations, job: job as NonNullable<ViewerPayload['job']>, jobMeta },
     cvatContext: { serverUrl: connection.mode === 'electron' || connection.mode === 'direct' ? connection.serverUrl : '', taskId, jobId },
   };
 }

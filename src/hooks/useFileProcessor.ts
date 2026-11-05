@@ -129,7 +129,15 @@ export function useFileProcessor(
         });
 
         if (xmlPaths.length === 0) {
-          throw new Error('Không tìm thấy tệp tin XML nào trong tệp ZIP đã tải lên.');
+          const names = entries.filter(entry => !entry.directory && !entry.filename.startsWith('__MACOSX/') && /\.(png|jpe?g|gif|webp|bmp)$/i.test(entry.filename))
+            .map(entry => entry.filename).sort((a, b) => a.localeCompare(b));
+          if (!names.length) throw new Error('ZIP không có XML hoặc ảnh được hỗ trợ.');
+          const parsed: CVATDataset = { filename: uploadedFile.name, type: 'images', source: 'zip', labels: [],
+            frames: names.map((name, index) => ({ id: String(index), name, width: 0, height: 0, boxes: [] })) };
+          setDataset(parsed);
+          onDatasetParsedRef.current?.(parsed);
+          setSuccessMsg('ZIP không có annotation XML; có thể xem ảnh trong ImageView.');
+          return;
         }
 
         setXmlFilesInZip(xmlPaths);

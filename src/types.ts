@@ -57,6 +57,7 @@ export interface CVATFrameData {
 }
 
 export interface CVATDataset {
+  viewerPayload?: import('./imageview/metadata').ViewerPayload;
   filename: string;
   taskName?: string;
   labels: string[];

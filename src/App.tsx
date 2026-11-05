@@ -4,6 +4,7 @@ import { lazy, Suspense, useState, useCallback, useRef, useEffect } from 'react'
 import { useFileProcessor } from './hooks/useFileProcessor';
 import { useDuplicateDetection } from './hooks/useDuplicateDetection';
 import { useFrameImage, type CvatFrameSource } from './hooks/useFrameImage';
+import { useJobImageCache } from './hooks/useJobImageCache';
 
 // Components
 import Header from './components/Header';
@@ -16,6 +17,7 @@ import StatsGrid from './components/StatsGrid';
 import DuplicateList from './components/DuplicateList';
 
 const PreviewModal = lazy(() => import('./components/PreviewModal'));
+const ImageViewProject = lazy(() => import('./components/ImageViewProject'));
 
 // Utils
 import { removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
@@ -23,12 +25,17 @@ import { deleteCvatJobShapes, loadCvatJobDataset, loadCvatTaskDataset } from './
 import type { DuplicateGroup } from './types';
 import { translate, useLocale } from './i18n/LocaleProvider';
 import { AnprProject } from './components/AnprProject';
-import { LayoutDashboard, CarFront, Settings } from 'lucide-react';
+import { LayoutDashboard, CarFront, Settings, Images, House, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import SettingsPanel from './components/SettingsPanel';
+import { createCvatSource, createZipSource } from './imageview/sources';
 
 export default function App() {
   const { locale } = useLocale();
-  const [project, setProject] = useState<'count' | 'anpr' | 'settings'>('count');
+  const [project, setProject] = useState<'count' | 'anpr' | 'imageview' | 'settings'>('count');
+  const [imageViewVisited, setImageViewVisited] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('cvat-sidebar-collapsed') !== 'false'; } catch { return true; }
+  });
   // ── Exclude labels (persisted to localStorage) ──
   const [excludeLabels, setExcludeLabels] = useState<string[]>(() => {
     try {
@@ -66,6 +73,8 @@ export default function App() {
   });
 
   // ── Duplicate detection hook ──
+  const jobImageCache = useJobImageCache(fp.dataset, cvatFrameSource);
+
   const detection = useDuplicateDetection({
     dataset: fp.dataset,
     excludeLabels,
@@ -147,6 +156,8 @@ export default function App() {
   // ── Extended reset (clean up manual images too) ──
   const handleReset = useCallback(() => {
     refreshRequest.current++;
+    setProject('count');
+    setImageViewVisited(false);
     setIsRefreshingJob(false);
     fp.resetState();
     setCvatFrameSource(null);
@@ -245,31 +256,44 @@ export default function App() {
   void handleDownloadCleanedXML;
   void handleDownloadCSVReport;
 
+  const createSharedViewerSource = useCallback(async () => {
+    if (cvatFrameSource && fp.dataset?.source === 'cvat') {
+      return createCvatSource(cvatFrameSource.connection, cvatFrameSource.taskId, cvatFrameSource.jobId, fp.dataset.viewerPayload);
+    }
+    if (fp.file?.name.toLowerCase().endsWith('.zip')) return createZipSource(fp.file, fp.dataset || undefined);
+    throw new Error(locale === 'vi' ? 'File XML chỉ có annotation, không chứa ảnh. Hãy chọn nguồn CVAT hoặc ZIP có ảnh tại Trang chính.' : 'XML contains annotations only. Choose CVAT or a ZIP with images on Home.');
+  }, [cvatFrameSource, fp.dataset, fp.file]);
+
   // ── Render ──
   return (
-    <div className="app-shell dark-theme min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased">
+    <div className={`app-shell ${project === 'imageview' ? 'is-preview' : ''} dark-theme min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased`}>
       <Header />
 
       <div className="workspace-shell flex-1">
-      <nav className="project-sidebar" aria-label="Projects">
-        {fp.dataset && <>
-          <button className={project === 'count' ? 'active' : ''} onClick={() => setProject('count')}><LayoutDashboard/><span>Box &amp; Trùng lặp</span></button>
-          <button className={project === 'anpr' ? 'active' : ''} onClick={() => setProject('anpr')}><CarFront/><span>ANPR biển số</span></button>
+      <nav className={`project-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`} aria-label="Projects">
+        <button className="sidebar-toggle" aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} title={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} aria-expanded={!sidebarCollapsed} onClick={() => {
+          const next = !sidebarCollapsed; setSidebarCollapsed(next);
+          try { localStorage.setItem('cvat-sidebar-collapsed', String(next)); } catch { /* Optional preference. */ }
+        }}>{sidebarCollapsed ? <ChevronsRight/> : <ChevronsLeft/>}<span>{locale === 'vi' ? 'Thu gọn' : 'Collapse'}</span></button>
+        {!fp.dataset ? <button title={locale === 'vi' ? 'Trang chính' : 'Home'} className={project !== 'settings' ? 'active' : ''} onClick={() => setProject('count')}><House/><span>{locale === 'vi' ? 'Trang chính' : 'Home'}</span></button> : <>
+          <button title="Box & Trùng lặp" className={project === 'count' ? 'active' : ''} onClick={() => setProject('count')}><LayoutDashboard/><span>Box &amp; Trùng lặp</span></button>
+          <button title="ANPR biển số" className={project === 'anpr' ? 'active' : ''} onClick={() => setProject('anpr')}><CarFront/><span>ANPR biển số</span></button>
+          <button title="ImageView" className={project === 'imageview' ? 'active' : ''} onClick={() => { setImageViewVisited(true); setProject('imageview'); }}><Images/><span>ImageView</span></button>
         </>}
-        <button className={project === 'settings' ? 'active' : ''} onClick={() => setProject(project === 'settings' ? 'count' : 'settings')}><Settings/><span>{locale === 'vi' ? 'Cài đặt' : 'Settings'}</span></button>
+        <button title={locale === 'vi' ? 'Cài đặt' : 'Settings'} className={project === 'settings' ? 'active' : ''} onClick={() => setProject(project === 'settings' ? 'count' : 'settings')}><Settings/><span>{locale === 'vi' ? 'Cài đặt' : 'Settings'}</span></button>
       </nav>
-      <main className="app-main flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {project === 'settings' ? <SettingsPanel /> : project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : <>
+      <main className={`app-main ${project === 'imageview' ? 'app-main-preview' : ''} flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6`}>
         {/* Upload Zone (shown when no dataset loaded) */}
-        <div hidden={Boolean(fp.dataset)}>
+        <div hidden={Boolean(fp.dataset) || project === 'settings'} data-testid="shared-source">
+          <h2 className="mb-4 text-xl font-bold">{locale === 'vi' ? 'Trang chính · Chọn nguồn dữ liệu' : 'Home · Choose a data source'}</h2>
           <UploadZone
             isDragging={fp.isDragging}
             fileInputRef={fp.fileInputRef}
             onUploadClick={fp.handleUploadClick}
-            onFileChange={fp.handleFileChange}
+            onFileChange={(event) => { setCvatFrameSource(null); void fp.handleFileChange(event); }}
             onDragOver={fp.handleDragOver}
             onDragLeave={fp.handleDragLeave}
-            onDrop={fp.handleDrop}
+            onDrop={(event) => { setCvatFrameSource(null); void fp.handleDrop(event); }}
             onCvatDatasetLoaded={(dataset, connection, taskId, jobId) => {
               setCvatFrameSource({ connection, taskId, jobId });
               fp.loadDataset(dataset);
@@ -281,15 +305,14 @@ export default function App() {
         <StatusBanners
           isLoading={fp.isLoading}
           error={fp.error}
-          successMsg={fp.successMsg}
+          successMsg={project === 'imageview' ? null : fp.successMsg}
           onDismissError={() => fp.setError(null)}
           onDismissSuccess={() => fp.setSuccessMsg(null)}
         />
 
-        {/* Main application interface */}
-        {fp.dataset && project === 'count' && (
-          <div className="space-y-6">
-            <FileInfoBar
+        {fp.dataset && project !== 'settings' && <FileInfoBar
+              jobImageCache={jobImageCache}
+              compact={project === 'imageview'}
               file={fp.file}
               dataset={fp.dataset}
               zipEntries={fp.zipEntries}
@@ -300,9 +323,13 @@ export default function App() {
               onRefreshJob={cvatFrameSource ? handleRefreshJob : undefined}
               cvatScope={cvatFrameSource?.jobId ? 'Job' : 'Task'}
               isRefreshingJob={isRefreshingJob}
-              onOpenBackupFolder={isDesktopJob ? () => void window.cvatDesktop?.openBackupFolder?.() : undefined}
-            />
-
+              onOpenBackupFolder={project === 'count' && isDesktopJob ? () => void window.cvatDesktop?.openBackupFolder?.() : undefined}
+            />}
+        {fp.dataset && imageViewVisited && <div className="imageview-pane" hidden={project !== 'imageview'}><Suspense fallback={<p>Đang mở ImageView…</p>}><ImageViewProject createSource={createSharedViewerSource} /></Suspense></div>}
+        {project === 'imageview' ? null : project === 'settings' ? <SettingsPanel /> : project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : <>
+        {/* Main application interface */}
+        {fp.dataset && project === 'count' && (
+          <div className="space-y-6">
             <ConfigPanel
               frameRange={detection.frameRange}
               frameRangeStart={detection.frameRangeStart}
@@ -387,7 +414,7 @@ export default function App() {
         </Suspense>
       )}
 
-      <Footer />
+      {project !== 'imageview' && <Footer />}
     </div>
   );
 }

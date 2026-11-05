@@ -1,7 +1,7 @@
 import { CloudDownload, KeyRound, ListChecks, LoaderCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CVATDataset } from '../types';
-import { listCvatJobs, listCvatTasks, loadCvatJobDataset, loadCvatTaskDataset, type CvatConnection, type CvatJobSummary, type CvatTaskSummary } from '../utils/cvatApi';
+import { getCvatJobTaskId, listCvatJobs, listCvatTasks, loadCvatJobDataset, loadCvatTaskDataset, type CvatConnection, type CvatJobSummary, type CvatTaskSummary } from '../utils/cvatApi';
 
 const DEFAULT_SERVERS = [
   'http://10.43.2.147:8080',
@@ -14,7 +14,9 @@ interface CvatConnectPanelProps {
 
 export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelProps) {
   const desktopAvailable = Boolean(window.cvatDesktop);
-  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVERS[0]);
+  const [serverUrl, setServerUrl] = useState(() => {
+    try { return localStorage.getItem('cvat-connection-server') || DEFAULT_SERVERS[0]; } catch { return DEFAULT_SERVERS[0]; }
+  });
   const [token, setToken] = useState('');
   const [tasks, setTasks] = useState<CvatTaskSummary[]>([]);
   const [taskId, setTaskId] = useState('');
@@ -27,16 +29,27 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
 
   useEffect(() => {
     let active = true;
+    setToken('');
+    setTasks([]); setJobs([]); setTaskId(''); setJobId('');
+    try { const url = new URL(serverUrl); if (!['http:', 'https:'].includes(url.protocol)) return; }
+    catch { setIsTokenRestoring(false); return; }
+    try { localStorage.setItem('cvat-connection-server', serverUrl); } catch { /* Optional preference. */ }
+    try {
+      const saved = JSON.parse(localStorage.getItem(`cvat-last-selection:${serverUrl}`) || 'null');
+      if (Number.isSafeInteger(saved?.taskId) && saved.taskId > 0) setTaskId(String(saved.taskId));
+      if (Number.isSafeInteger(saved?.jobId) && saved.jobId > 0) setJobId(String(saved.jobId));
+    } catch { /* Optional preference. */ }
     if (desktopAvailable) setIsTokenRestoring(true);
     void window.cvatDesktop?.hasDefaultToken().then((hasToken) => { if (active) setHasDefaultToken(hasToken); });
     void window.cvatDesktop?.getStoredToken(serverUrl)
       .then((storedToken) => { if (active && storedToken) setToken(storedToken); })
+      .catch(() => { if (active) setError('Không khôi phục được PAT cho server này.'); })
       .finally(() => { if (active) setIsTokenRestoring(false); });
     return () => { active = false; };
-  }, [desktopAvailable]);
+  }, [desktopAvailable, serverUrl]);
 
   const saveCurrentToken = () => {
-    void window.cvatDesktop?.saveToken(token).catch((err) => {
+    void window.cvatDesktop?.saveToken(token, serverUrl).catch((err) => {
       setError(err instanceof Error ? err.message : 'Không thể lưu PAT đã mã hóa.');
     });
   };
@@ -59,7 +72,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     setError(null);
     setIsLoading(true);
     try {
-      await window.cvatDesktop?.saveToken(token);
+      await window.cvatDesktop?.saveToken(token, serverUrl);
       const loadedTasks = await listCvatTasks(connection());
       setTasks(loadedTasks);
       setJobs([]);
@@ -97,9 +110,9 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
   };
 
   const handleLoad = async (wholeTask: boolean) => {
-    const activeTaskId = Number(taskId);
-    const activeJobId = Number(jobId);
-    if (!Number.isInteger(activeTaskId) || activeTaskId < 1 || (!wholeTask && (!Number.isInteger(activeJobId) || activeJobId < 1))) {
+    let activeTaskId = Number(taskId);
+    const activeJobId = Number(jobId.match(/\/jobs\/(\d+)(?:[/?#]|$)/)?.[1] ?? jobId);
+    if ((wholeTask && (!Number.isInteger(activeTaskId) || activeTaskId < 1)) || (!wholeTask && (!Number.isInteger(activeJobId) || activeJobId < 1))) {
       setError(wholeTask ? 'Chọn Task hợp lệ.' : 'Chọn Task và Job hợp lệ.');
       return;
     }
@@ -108,10 +121,16 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     setIsLoading(true);
     try {
       const activeConnection = connection();
+      if (!wholeTask && (!Number.isInteger(activeTaskId) || activeTaskId < 1)) {
+        activeTaskId = await getCvatJobTaskId(activeConnection, activeJobId);
+        setTaskId(String(activeTaskId));
+      }
       const dataset = wholeTask
         ? await loadCvatTaskDataset(activeConnection, activeTaskId)
         : await loadCvatJobDataset(activeConnection, activeTaskId, activeJobId);
-      onDatasetLoaded(dataset, activeConnection, activeTaskId, wholeTask ? undefined : activeJobId);
+      await window.cvatDesktop?.saveToken(token, serverUrl);
+      try { localStorage.setItem(`cvat-last-selection:${serverUrl}`, JSON.stringify({ taskId: activeTaskId, jobId: wholeTask ? undefined : activeJobId })); } catch { /* Optional preference. */ }
+      onDatasetLoaded?.(dataset, activeConnection, activeTaskId, wholeTask ? undefined : activeJobId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải annotation từ CVAT.');
     } finally {
@@ -177,7 +196,7 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
               {jobs.map(job => <option key={job.id} value={job.id}>#{job.id} — Frame {job.start_frame ?? '?'}–{job.stop_frame ?? '?'}</option>)}
             </select>
           ) : (
-            <input value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="Lấy danh sách hoặc nhập Job ID" inputMode="numeric" disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
+            <input value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="Job ID hoặc link Job trên server đang chọn" inputMode="text" disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
           )}
         </label>
         <button type="button" onClick={() => void handleLoad(false)} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
