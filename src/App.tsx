@@ -34,6 +34,9 @@ export default function App() {
   const { locale } = useLocale();
   const [project, setProject] = useState<'count' | 'anpr' | 'dpm' | 'imageview' | 'settings'>('count');
   const [imageViewVisited, setImageViewVisited] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<string | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [updateError, setUpdateError] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('cvat-sidebar-collapsed') !== 'false'; } catch { return true; }
   });
@@ -60,6 +63,24 @@ export default function App() {
   const [isRefreshingJob, setIsRefreshingJob] = useState(false);
   const refreshRequest = useRef(0);
   const restorePreviewFrameRef = useRef<string | null>(null);
+
+  useEffect(() => window.cvatDesktop?.onUpdateAvailable?.(({ version }) => {
+    setAvailableUpdate(version);
+    setUpdateError('');
+  }), []);
+
+  const installAvailableUpdate = async () => {
+    setInstallingUpdate(true);
+    setUpdateError('');
+    try {
+      const result = await window.cvatDesktop?.installUpdate?.();
+      if (result?.message) setUpdateError(result.message);
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : 'Không cài được bản cập nhật.');
+    } finally {
+      setInstallingUpdate(false);
+    }
+  };
 
   // ── Visualizer settings ──
   const [customZoomPadding, setCustomZoomPadding] = useState<number>(60);
@@ -269,6 +290,18 @@ export default function App() {
   return (
     <div className={`app-shell ${project === 'imageview' ? 'is-preview' : ''} dark-theme min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased`}>
       <Header />
+      {availableUpdate && <div className="fixed right-4 top-4 z-[120] flex max-w-lg items-center gap-3 rounded-xl border border-cyan-400/40 bg-slate-950/95 px-4 py-3 text-sm shadow-2xl" role="status" aria-live="polite">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-white">{locale === 'vi' ? `Có bản cập nhật CVAT Tools ${availableUpdate}` : `CVAT Tools ${availableUpdate} is available`}</p>
+          <p className="text-xs text-slate-300">{updateError || (locale === 'vi' ? 'Bạn có thể cập nhật ngay hoặc để sau.' : 'Update now or do it later.')}</p>
+        </div>
+        <button disabled={installingUpdate} onClick={() => void installAvailableUpdate()} className="shrink-0 rounded-lg bg-cyan-600 px-3 py-2 font-semibold text-white disabled:opacity-60">
+          {installingUpdate ? (locale === 'vi' ? 'Đang tải…' : 'Downloading…') : (locale === 'vi' ? 'Cập nhật' : 'Update')}
+        </button>
+        <button onClick={() => { setAvailableUpdate(null); setUpdateError(''); }} className="shrink-0 rounded-lg border border-slate-600 px-3 py-2 text-slate-200">
+          {locale === 'vi' ? 'Để sau' : 'Later'}
+        </button>
+      </div>}
 
       <div className="workspace-shell flex-1">
       <nav className={`project-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`} aria-label="Projects">

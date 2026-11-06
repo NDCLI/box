@@ -3,6 +3,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cvatDesktop', {
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   checkForUpdates: () => ipcRenderer.invoke('app:update:check'),
+  installUpdate: () => ipcRenderer.invoke('app:update:install'),
+  onUpdateAvailable: (callback) => {
+    const listener = (_event, update) => callback(update);
+    ipcRenderer.on('app:update:available', listener);
+    return () => ipcRenderer.removeListener('app:update:available', listener);
+  },
   request: (request) => ipcRenderer.invoke('cvat:request', request),
   viewerOpen: (request) => ipcRenderer.invoke('viewer:open', request),
   viewerFrame: (request) => ipcRenderer.invoke('viewer:frame', request),

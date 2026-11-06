@@ -222,8 +222,11 @@ ipcMain.handle('app:info', async () => {
   try { lastUpdate = JSON.parse((await fs.readFile(path.join(app.getPath('userData'), 'updates', 'status.json'), 'utf8')).replace(/^\uFEFF/, '')); } catch { /* No update has run yet. */ }
   return { version: app.getVersion(), executablePath: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath, lastUpdate };
 });
-ipcMain.handle('app:update:check', () => checkForPortableUpdate(true));
-async function checkForPortableUpdate(manual = false) {
+ipcMain.handle('app:update:check', () => checkForPortableUpdate('manual'));
+ipcMain.handle('app:update:install', () => checkForPortableUpdate('install'));
+async function checkForPortableUpdate(mode = 'automatic') {
+  const manual = mode === 'manual';
+  const automatic = mode === 'automatic';
   if (updateCheckRunning) return { message: 'Đang kiểm tra cập nhật…' };
   if (process.platform !== 'win32' || !app.isPackaged || process.windowsStore) return { message: 'Kiểm tra cập nhật chỉ dùng trong bản Windows chạy độc lập.' };
   updateCheckRunning = true;
@@ -243,21 +246,31 @@ async function checkForPortableUpdate(manual = false) {
     const latest = String(release.tag_name || '').replace(/^v/, '');
     const parts = value => value.split('.').map(Number);
     const currentParts = parts(app.getVersion()), latestParts = parts(latest);
-    if (latestParts.length !== 3 || latestParts.some(Number.isNaN)) return;
+    if (latestParts.length !== 3 || latestParts.some(Number.isNaN)) throw new Error('Tag phiên bản trên GitHub không hợp lệ.');
     const firstDifference = latestParts.findIndex((n, i) => n !== currentParts[i]);
-    if (firstDifference < 0 || latestParts[firstDifference] < currentParts[firstDifference]) return { message: `Bạn đang dùng phiên bản mới nhất (${app.getVersion()}).` };
+    if (firstDifference < 0 || latestParts[firstDifference] < currentParts[firstDifference]) {
+      return manual ? { message: `Bạn đang dùng phiên bản mới nhất (${app.getVersion()}).` } : { available: false };
+    }
     const isPortable = Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
     const assetName = isPortable ? `CVAT-Tools-${latest}-portable-win-x64.exe` : `CVAT-Tools-${latest}-win-x64.zip`;
     const asset = release.assets?.find(item => item.name === assetName);
     const checksum = release.assets?.find(item => item.name === `${asset?.name}.sha256`);
     if (!asset || !checksum || asset.size > 300 * 1024 * 1024) throw new Error('Bản phát hành chưa có đủ gói cập nhật và checksum.');
+    if (automatic) {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send('app:update:available', { version: latest });
+      }
+      return { available: true, version: latest };
+    }
+    if (manual) {
+      const choice = await dialog.showMessageBox({ type: 'info', buttons: ['Cập nhật ngay', 'Để sau'], defaultId: 0, cancelId: 1, message: `Có bản cập nhật CVAT Tools ${latest}.`, detail: 'Ứng dụng sẽ tải bản vá và khởi động lại. PAT đã lưu được giữ trên máy này.' });
+      if (choice.response !== 0) return { message: `Có phiên bản ${latest}. Bạn đã chọn cập nhật sau.` };
+    }
     const [binaryResponse, hashResponse] = await Promise.all([fetch(asset.browser_download_url), fetch(checksum.browser_download_url)]);
     if (!binaryResponse.ok || !hashResponse.ok) throw new Error('Không tải được bản cập nhật.');
     const binary = Buffer.from(await binaryResponse.arrayBuffer());
     const expectedHash = (await hashResponse.text()).trim().split(/\s+/)[0].toLowerCase();
     if (binary.length !== asset.size || crypto.createHash('sha256').update(binary).digest('hex') !== expectedHash) throw new Error('Checksum bản cập nhật không khớp.');
-    const choice = await dialog.showMessageBox({ type: 'info', buttons: ['Cập nhật ngay', 'Để sau'], defaultId: 0, cancelId: 1, message: `Có bản cập nhật CVAT Box Counter ${latest}.`, detail: 'Ứng dụng sẽ tải bản vá và khởi động lại. PAT đã lưu được giữ trên máy này.' });
-    if (choice.response !== 0) return { message: `Có phiên bản ${latest}. Bạn đã chọn cập nhật sau.` };
     const target = isPortable ? process.env.PORTABLE_EXECUTABLE_FILE : path.dirname(process.execPath);
     if (!path.isAbsolute(target) || target === path.parse(target).root) throw new Error('Thư mục app không hợp lệ.');
     if (!isPortable) await physicalFs.access(path.join(target, 'resources', 'app.asar'));
