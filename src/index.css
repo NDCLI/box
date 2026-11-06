@@ -43,17 +43,24 @@ html, body, #root, .dark-theme {
 .dark-theme { min-height: 100vh; }
 
 .app-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background:
     radial-gradient(circle at 12% 4%, rgba(34, 211, 238, 0.09), transparent 27rem),
     radial-gradient(circle at 92% 20%, rgba(124, 58, 237, 0.12), transparent 32rem),
     linear-gradient(180deg, #0a1020 0%, #070a12 48%, #05070c 100%) !important;
 }
 
-.app-main { position: relative; }
+.app-main { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .app-main.app-main-preview { max-width: none; padding: 10px 12px; }
 .app-main-preview > :not([hidden]) ~ :not([hidden]) { margin-top: 8px; margin-bottom: 0; }
 .app-shell.is-preview { height: 100dvh; min-height: 0; overflow: hidden; }
 .app-shell.is-preview > .app-header { flex: 0 0 auto; }
+.app-shell > .app-header,.app-shell > .app-footer { flex: 0 0 auto; }
+.app-shell > .workspace-shell { display:flex; flex: 1 1 0; min-width:0; min-height:0; overflow:hidden; }
+.app-shell > .workspace-shell > .project-sidebar { flex-shrink:0; overflow-y:auto; overscroll-behavior:contain; }
+.app-shell:not(.is-preview) > .workspace-shell > .app-main { min-width:0; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
 .app-shell.is-preview > .workspace-shell { display: flex; flex: 1 1 0; min-height: 0; overflow: hidden; }
 .app-main.app-main-preview { display: flex; flex-direction: column; min-height: 0; min-width: 0; gap: 8px; overflow: hidden; }
 .app-main-preview > :not([hidden]) { flex-shrink: 0; margin: 0 !important; }
@@ -117,7 +124,7 @@ html, body, #root, .dark-theme {
 .dpm-sseg-results .anpr-table-wrap { max-height:max(10rem,calc(100vh - 390px)); }
 .dpm-sseg-project table { font-size:.72rem; }
 .dpm-sseg-project th,.dpm-sseg-project td { padding:.42rem; }
-@media(max-width:760px){.workspace-shell{display:block}.project-sidebar{width:auto;padding:.5rem;flex-direction:row;overflow:auto;border-right:0;border-bottom:1px solid var(--border)}.project-sidebar button{white-space:nowrap}.project-sidebar button span{font-size:.78rem}.anpr-project>header{align-items:flex-start;flex-direction:column}.anpr-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.anpr-toolbar{flex-wrap:wrap}.anpr-toolbar input{flex-basis:60%}}
+@media(max-width:760px){.app-shell:not(.is-preview)>.workspace-shell{flex-direction:column}.app-shell:not(.is-preview)>.workspace-shell>.project-sidebar{width:auto;max-height:64px;flex:0 0 auto;padding:.5rem;flex-direction:row;overflow-x:auto;overflow-y:hidden;border-right:0;border-bottom:1px solid var(--border)}.app-shell:not(.is-preview)>.workspace-shell>.app-main{flex:1 1 0;width:100%;min-height:0;overflow-y:auto}.project-sidebar button{white-space:nowrap}.project-sidebar button span{font-size:.78rem}.anpr-project>header{align-items:flex-start;flex-direction:column}.anpr-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.anpr-toolbar{flex-wrap:wrap}.anpr-toolbar input{flex-basis:60%}}
 
 .app-header {
   border-bottom-color: rgba(96, 165, 250, 0.2) !important;
