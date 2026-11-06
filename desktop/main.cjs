@@ -292,6 +292,14 @@ $statusFile=${quotePS(statusPath)}
 function Write-UpdateStatus($state, $message) {
   @{ state=$state; message=$message; fromVersion=${quotePS(app.getVersion())}; toVersion=${quotePS(latest)}; time=(Get-Date).ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath $statusFile -Encoding UTF8
 }
+function Get-Sha256([string]$file) {
+  $algorithm=[System.Security.Cryptography.SHA256]::Create()
+  try {
+    $stream=[System.IO.File]::OpenRead($file)
+    try { [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
+    finally { $stream.Dispose() }
+  } finally { $algorithm.Dispose() }
+}
 try {
   Write-UpdateStatus 'applying' 'Đang giải nén và cài bản vá.'
   ${isPortable ? '' : `
@@ -302,15 +310,15 @@ try {
   while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }
   Start-Sleep -Seconds 2
   ${isPortable ? `Copy-Item -LiteralPath $target -Destination $backup
-  $originalHash=(Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
-  $backupHash=(Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash.ToLowerInvariant()
+  $originalHash=Get-Sha256 $target
+  $backupHash=Get-Sha256 $backup
   if ($originalHash -ne $backupHash) { throw 'Không tạo được bản dự phòng trong thư mục Temp.' }
   Remove-Item -LiteralPath $target -Force
   try {
     if (${stagedAndTargetShareVolume ? '$true' : '$false'}) { Move-Item -LiteralPath $staged -Destination $target }
     else {
       Copy-Item -LiteralPath $staged -Destination $target
-      $actualHash=(Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+      $actualHash=Get-Sha256 $target
       if ($actualHash -ne $expectedHash) { throw 'Checksum của file sau khi chép không khớp.' }
     }
     $updatedProcess=Start-Process -FilePath $target -WorkingDirectory (Split-Path $target -Parent) -WindowStyle Normal -PassThru
