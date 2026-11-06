@@ -422,11 +422,14 @@ export default function ViewerPage(props) {
   // Keyboard navigation
   onMount(() => {
     function onKeyDown(event) {
-      if (document.activeElement !== searchInput?.getRootNode().host) return
-      const target = event.composedPath()[0]
+      const host = viewerStage?.getRootNode()?.host
+      const imageViewPane = host?.closest('.imageview-pane')
+      if (!host || !imageViewPane || imageViewPane.hidden) return
+      const target = event.composedPath()[0] || event.target
 
       if ((event.ctrlKey || event.metaKey) && (event.key === 'f' || event.key === 'F')) {
         event.preventDefault()
+        event.stopPropagation()
         if (searchInput) searchInput.focus()
         return
       }
