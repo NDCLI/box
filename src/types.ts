@@ -6,6 +6,8 @@ export interface CVATAttribute {
 export interface CVATBox {
   id: string; // generated client-side id for UI reference
   label: string;
+  shapeType?: string;
+  maskRle?: number[];
   labelId?: number;
   serverShapeId?: number;
   annotationKind?: 'shape' | 'track';

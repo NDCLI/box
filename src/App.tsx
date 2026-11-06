@@ -25,13 +25,14 @@ import { deleteCvatJobShapes, loadCvatJobDataset, loadCvatTaskDataset } from './
 import type { DuplicateGroup } from './types';
 import { translate, useLocale } from './i18n/LocaleProvider';
 import { AnprProject } from './components/AnprProject';
-import { LayoutDashboard, CarFront, Settings, Images, House, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { DpmSsegProject } from './components/DpmSsegProject';
+import { LayoutDashboard, CarFront, Settings, Images, House, ChevronsLeft, ChevronsRight, ScanSearch } from 'lucide-react';
 import SettingsPanel from './components/SettingsPanel';
 import { createCvatSource, createZipSource } from './imageview/sources';
 
 export default function App() {
   const { locale } = useLocale();
-  const [project, setProject] = useState<'count' | 'anpr' | 'imageview' | 'settings'>('count');
+  const [project, setProject] = useState<'count' | 'anpr' | 'dpm' | 'imageview' | 'settings'>('count');
   const [imageViewVisited, setImageViewVisited] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('cvat-sidebar-collapsed') !== 'false'; } catch { return true; }
@@ -278,6 +279,7 @@ export default function App() {
         {!fp.dataset ? <button title={locale === 'vi' ? 'Trang chính' : 'Home'} className={project !== 'settings' ? 'active' : ''} onClick={() => setProject('count')}><House/><span>{locale === 'vi' ? 'Trang chính' : 'Home'}</span></button> : <>
           <button title="Box & Trùng lặp" className={project === 'count' ? 'active' : ''} onClick={() => setProject('count')}><LayoutDashboard/><span>Box &amp; Trùng lặp</span></button>
           <button title="ANPR biển số" className={project === 'anpr' ? 'active' : ''} onClick={() => setProject('anpr')}><CarFront/><span>ANPR biển số</span></button>
+          <button title="DPM / SSEG" className={project === 'dpm' ? 'active' : ''} onClick={() => setProject('dpm')}><ScanSearch/><span>DPM / SSEG</span></button>
           <button title="ImageView" className={project === 'imageview' ? 'active' : ''} onClick={() => { setImageViewVisited(true); setProject('imageview'); }}><Images/><span>ImageView</span></button>
         </>}
         <button title={locale === 'vi' ? 'Cài đặt' : 'Settings'} className={project === 'settings' ? 'active' : ''} onClick={() => setProject(project === 'settings' ? 'count' : 'settings')}><Settings/><span>{locale === 'vi' ? 'Cài đặt' : 'Settings'}</span></button>
@@ -326,7 +328,7 @@ export default function App() {
               onOpenBackupFolder={project === 'count' && isDesktopJob ? () => void window.cvatDesktop?.openBackupFolder?.() : undefined}
             />}
         {fp.dataset && imageViewVisited && <div className="imageview-pane" hidden={project !== 'imageview'}><Suspense fallback={<p>Đang mở ImageView…</p>}><ImageViewProject createSource={createSharedViewerSource} /></Suspense></div>}
-        {project === 'imageview' ? null : project === 'settings' ? <SettingsPanel /> : project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : <>
+        {project === 'imageview' ? null : project === 'settings' ? <SettingsPanel /> : project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : project === 'dpm' ? <DpmSsegProject locale={locale} dataset={fp.dataset} zipEntries={fp.zipEntries} manualImages={manualImages} cvatFrameSource={cvatFrameSource} /> : <>
         {/* Main application interface */}
         {fp.dataset && project === 'count' && (
           <div className="space-y-6">

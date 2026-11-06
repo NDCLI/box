@@ -269,6 +269,8 @@ export function toCvatDataset(task: CvatTask, annotations: CvatAnnotations, fram
     const box: CVATBox = {
       id: String(shape.id ?? `${trackId ?? 'shape'}-${shape.frame}-${globalIndex}`),
       label,
+      shapeType: shape.type,
+      maskRle: isMask ? shape.points.slice(0, -4) : undefined,
       labelId: shape.label_id,
       serverShapeId: trackId === undefined && Number.isInteger(shape.id) ? shape.id : undefined,
       annotationKind: trackId === undefined ? 'shape' : 'track',

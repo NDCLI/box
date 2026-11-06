@@ -252,6 +252,20 @@ img {
   white-space: nowrap;
 }
 
+.viewer-title-block .viewer-frame-title {
+  max-width: 10rem;
+  font-size: 0.95rem;
+}
+
+.viewer-filename {
+  max-width: min(42vw, 32rem);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .viewer-eyebrow {
   color: var(--text-muted);
   font-family: var(--font-mono);

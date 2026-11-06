@@ -186,6 +186,37 @@ ipcMain.handle('cvat:backup:open-folder', async () => {
 });
 
 let updateCheckRunning = false;
+async function cleanupUpdaterArtifacts() {
+  const staleBefore = Date.now() - 24 * 60 * 60 * 1000;
+  const removeOld = async (directory, matches) => {
+    let entries;
+    try { entries = await fs.readdir(directory, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (!matches(entry)) continue;
+      const filename = path.join(directory, entry.name);
+      try {
+        const info = await fs.stat(filename);
+        if (info.mtimeMs < staleBefore) await fs.rm(filename, { recursive: true, force: true });
+      } catch { /* Best-effort cleanup; never block app startup. */ }
+    }
+  };
+  const removeIfEmpty = async directory => {
+    try { if ((await fs.readdir(directory)).length === 0) await fs.rmdir(directory); } catch { /* Not empty or already removed. */ }
+  };
+
+  await removeOld(path.join(app.getPath('userData'), 'updates'), entry =>
+    /^(?:apply-|remove-legacy-exe-).*\.(?:ps1|cmd)$/i.test(entry.name));
+  const tempUpdateDirectory = path.join(os.tmpdir(), 'CVAT-Tools', 'updates');
+  await removeOld(tempUpdateDirectory, entry => entry.isDirectory() && entry.name.startsWith('patch-'));
+  await removeIfEmpty(tempUpdateDirectory);
+  await removeIfEmpty(path.dirname(tempUpdateDirectory));
+
+  if (process.env.PORTABLE_EXECUTABLE_FILE) {
+    const legacyUpdateDirectory = path.join(path.dirname(process.env.PORTABLE_EXECUTABLE_FILE), '.updates');
+    await removeOld(legacyUpdateDirectory, entry => entry.isDirectory() && entry.name.startsWith('patch-'));
+    await removeIfEmpty(legacyUpdateDirectory);
+  }
+}
 ipcMain.handle('app:info', async () => {
   let lastUpdate = null;
   try { lastUpdate = JSON.parse((await fs.readFile(path.join(app.getPath('userData'), 'updates', 'status.json'), 'utf8')).replace(/^\uFEFF/, '')); } catch { /* No update has run yet. */ }
@@ -196,6 +227,12 @@ async function checkForPortableUpdate(manual = false) {
   if (updateCheckRunning) return { message: 'Đang kiểm tra cập nhật…' };
   if (process.platform !== 'win32' || !app.isPackaged || process.windowsStore) return { message: 'Kiểm tra cập nhật chỉ dùng trong bản Windows chạy độc lập.' };
   updateCheckRunning = true;
+  let stagedDirectory = '';
+  let updateDirectory = '';
+  let temporaryAppDirectory = '';
+  let helperPath = '';
+  let batchPath = '';
+  let helperLaunched = false;
   try {
     const response = await fetch('https://api.github.com/repos/NDCLI/box/releases/latest', {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'CVAT-Box-Counter-Updater' },
@@ -224,18 +261,31 @@ async function checkForPortableUpdate(manual = false) {
     const target = isPortable ? process.env.PORTABLE_EXECUTABLE_FILE : path.dirname(process.execPath);
     if (!path.isAbsolute(target) || target === path.parse(target).root) throw new Error('Thư mục app không hợp lệ.');
     if (!isPortable) await physicalFs.access(path.join(target, 'resources', 'app.asar'));
-    const updateDirectory = path.join(isPortable ? path.dirname(target) : target, '.updates');
+    temporaryAppDirectory = path.join(os.tmpdir(), 'CVAT-Tools');
+    updateDirectory = path.join(temporaryAppDirectory, 'updates');
     await fs.mkdir(updateDirectory, { recursive: true });
-    const staged = path.join(await fs.mkdtemp(path.join(updateDirectory, 'patch-')), assetName);
+    stagedDirectory = await fs.mkdtemp(path.join(updateDirectory, 'patch-'));
+    const staged = path.join(stagedDirectory, assetName);
     await fs.writeFile(staged, binary);
     const quotePS = value => "'" + value.replace(/'/g, "''") + "'";
     const executableName = path.basename(process.execPath);
     const helperDirectory = path.join(app.getPath('userData'), 'updates');
     await fs.mkdir(helperDirectory, { recursive: true });
     const statusPath = path.join(helperDirectory, 'status.json');
+    helperPath = path.join(helperDirectory, `apply-${Date.now()}.ps1`);
+    batchPath = helperPath.replace(/\.ps1$/, '.cmd');
+    const backup = path.join(stagedDirectory, `${path.basename(target)}.backup`);
+    const stagedAndTargetShareVolume = path.parse(path.resolve(stagedDirectory)).root.toLowerCase() === path.parse(path.resolve(target)).root.toLowerCase();
     const script = `$ErrorActionPreference='Stop'
 $target=${quotePS(target)}
 $staged=${quotePS(staged)}
+$stagingDirectory=${quotePS(stagedDirectory)}
+$updateDirectory=${quotePS(updateDirectory)}
+$temporaryAppDirectory=${quotePS(temporaryAppDirectory)}
+$helperScript=${quotePS(helperPath)}
+$helperBatch=${quotePS(batchPath)}
+$backup=${quotePS(backup)}
+$expectedHash=${quotePS(expectedHash)}
 $payload=$staged
 $log=${quotePS(path.join(helperDirectory, 'last-update.log'))}
 $statusFile=${quotePS(statusPath)}
@@ -251,27 +301,54 @@ try {
   `}
   while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }
   Start-Sleep -Seconds 2
-  ${isPortable ? `Remove-Item -LiteralPath $target -Force
-  Move-Item -LiteralPath $payload -Destination $target` : `Copy-Item -Path (Join-Path $payload '*') -Destination $target -Recurse -Force`}
-  Remove-Item -LiteralPath (Split-Path $staged -Parent) -Recurse -Force
-  Start-Process -FilePath ${isPortable ? '$target' : `(Join-Path $target ${quotePS(executableName)})`} -WorkingDirectory ${isPortable ? '(Split-Path $target -Parent)' : '$target'} -WindowStyle Normal
+  ${isPortable ? `Copy-Item -LiteralPath $target -Destination $backup
+  $originalHash=(Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+  $backupHash=(Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($originalHash -ne $backupHash) { throw 'Không tạo được bản dự phòng trong thư mục Temp.' }
+  Remove-Item -LiteralPath $target -Force
+  try {
+    if (${stagedAndTargetShareVolume ? '$true' : '$false'}) { Move-Item -LiteralPath $staged -Destination $target }
+    else {
+      Copy-Item -LiteralPath $staged -Destination $target
+      $actualHash=(Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+      if ($actualHash -ne $expectedHash) { throw 'Checksum của file sau khi chép không khớp.' }
+    }
+    $updatedProcess=Start-Process -FilePath $target -WorkingDirectory (Split-Path $target -Parent) -WindowStyle Normal -PassThru
+    Start-Sleep -Seconds 3
+    if ($updatedProcess.HasExited) { throw 'Phiên bản mới thoát ngay sau khi khởi động.' }
+    Remove-Item -LiteralPath $backup -Force
+  } catch {
+    if (Test-Path -LiteralPath $backup) {
+      Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+      Move-Item -LiteralPath $backup -Destination $target -Force
+    }
+    throw
+  }` : `Copy-Item -Path (Join-Path $payload '*') -Destination $target -Recurse -Force
+  Start-Process -FilePath (Join-Path $target ${quotePS(executableName)}) -WorkingDirectory $target -WindowStyle Normal`}
   ${isPortable ? '' : `Remove-Item -LiteralPath (Join-Path $target 'CVAT Box Counter & Duplicate Inspector.exe') -Force -ErrorAction SilentlyContinue`}
   'Update completed' | Set-Content -LiteralPath $log
   Write-UpdateStatus 'success' 'Đã thay app và khởi động phiên bản mới.'
-  Get-ChildItem -LiteralPath (Split-Path $target -Parent) -Filter ((Split-Path $target -Leaf) + '.backup-*') -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
   $_ | Out-String | Set-Content -LiteralPath $log
   Write-UpdateStatus 'failed' $_.Exception.Message
-  exit 1
+  throw
+} finally {
+  Remove-Item -LiteralPath $stagingDirectory -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $helperScript -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $helperBatch -Force -ErrorAction SilentlyContinue
+  foreach ($directory in @($updateDirectory, $temporaryAppDirectory)) {
+    if ((Test-Path -LiteralPath $directory -PathType Container) -and (Get-ChildItem -LiteralPath $directory -Force -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0) {
+      Remove-Item -LiteralPath $directory -Force -ErrorAction SilentlyContinue
+    }
+  }
 }`;
-    const helperPath = path.join(helperDirectory, `apply-${Date.now()}.ps1`);
     await fs.writeFile(helperPath, '\uFEFF' + script, 'utf8');
     await fs.writeFile(statusPath, JSON.stringify({ state: 'scheduled', fromVersion: app.getVersion(), toVersion: latest, message: 'Đã tải bản vá; đang khởi động trình cập nhật.' }));
-    const batchPath = helperPath.replace(/\.ps1$/, '.cmd');
     const launchLog = path.join(helperDirectory, 'helper-launch.log');
     await fs.writeFile(batchPath, '@echo off\r\nstart "" /b "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "%CVAT_UPDATE_SCRIPT%" >>"%CVAT_UPDATE_LOG%" 2>&1\r\n', 'ascii');
     const child = spawn('cmd.exe', ['/d', '/v:off', '/s', '/c', '""%CVAT_UPDATE_LAUNCHER%""'], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, cwd: os.tmpdir(), env: { ...process.env, CVAT_UPDATE_LAUNCHER: batchPath, CVAT_UPDATE_SCRIPT: helperPath, CVAT_UPDATE_LOG: launchLog } });
     await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
+    helperLaunched = true;
     child.unref();
     let helperStarted = false;
     for (let attempt = 0; attempt < 100; attempt++) {
@@ -282,7 +359,19 @@ try {
     }
     if (!helperStarted) throw new Error(`Không khởi động được trình cập nhật. Nhật ký: ${launchLog}`);
     app.quit();
-  } catch (error) { if (manual) throw error; }
+  } catch (error) {
+    if (!helperLaunched) {
+      for (const filename of [stagedDirectory, helperPath, batchPath]) {
+        if (filename) await fs.rm(filename, { recursive: true, force: true }).catch(() => {});
+      }
+      for (const directory of [updateDirectory, temporaryAppDirectory]) {
+        if (directory) {
+          try { if ((await fs.readdir(directory)).length === 0) await fs.rmdir(directory); } catch { /* Best-effort cleanup. */ }
+        }
+      }
+    }
+    if (manual) throw error;
+  }
   finally { updateCheckRunning = false; }
 }
 
@@ -343,6 +432,7 @@ app.setAppUserModelId(APP_ID);
 
 app.whenReady().then(async () => {
   await restoreDefaultTokens();
+  if (process.platform === 'win32') await cleanupUpdaterArtifacts();
   if (app.isPackaged && process.platform === 'win32') {
     const preferredExecutable = path.join(path.dirname(process.execPath), 'CVAT Tools.exe');
     if (path.resolve(process.execPath).toLowerCase() !== path.resolve(preferredExecutable).toLowerCase() && await physicalFs.access(preferredExecutable).then(() => true, () => false)) {

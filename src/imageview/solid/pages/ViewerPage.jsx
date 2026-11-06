@@ -80,6 +80,13 @@ export default function ViewerPage(props) {
     return list[Math.min(Math.max(displayedViewerIndex(), 0), list.length - 1)]
   }
 
+  const displayedFrameName = () => {
+    const image = displayedImage()
+    return image?.frameId ?? displayedViewerIndex() + 1
+  }
+
+  const displayedFileName = () => displayedImage()?.name.replace(/\\/g, '/').split('/').pop() || ''
+
   createEffect(() => {
     const url = extractedUrls()[viewerIndex()]
     if (!url) return
@@ -261,7 +268,7 @@ export default function ViewerPage(props) {
     props.source.onIndexChange?.(safeIndex)
     if (displayImages[safeIndex]) {
       if (!searchInput?.matches(':focus')) {
-        setSearchQuery(displayImages[safeIndex].name)
+        setSearchQuery('')
       }
     }
   })
@@ -694,10 +701,8 @@ export default function ViewerPage(props) {
                     </button>
                   </div>
                   <div class="viewer-title-block">
-                    <span class="viewer-eyebrow">IMAGE VIEWER</span>
-                    <strong title={displayedImage()?.name}>
-                      {displayedImage()?.name || 'Ảnh hiện tại'}
-                    </strong>
+                    <strong class="viewer-frame-title">Frame {displayedFrameName()}</strong>
+                    <span class="viewer-filename" title={displayedImage()?.name}>{displayedFileName()}</span>
                   </div>
                 </div>
 
@@ -894,14 +899,13 @@ export default function ViewerPage(props) {
                 <Show when={imageLoadState() === 'loading'}>
                   <div class="viewer-loading" role="status" aria-live="polite">
                     <span class="loading-spinner loading-spinner-small" aria-hidden="true" />
-                    <span>Đang tải: {activeImage()?.name}</span>
+                    <span>Đang tải Frame {activeImage()?.frameId ?? viewerIndex() + 1}…</span>
                   </div>
                 </Show>
               </div>
 
               <div class="viewer-meta">
                 <div class="viewer-meta-content">
-                  <span class="viewer-current-name" title={displayedImage()?.name}>{displayedImage()?.name.split('/').pop()}</span>
                   <input
                     ref={searchInput}
                     type="text"
@@ -949,10 +953,7 @@ export default function ViewerPage(props) {
                     }}
                     onFocus={() => setSearchQuery('')}
                     onBlur={() => {
-                      const displayList = viewerImages()
-                      if (displayList[viewerIndex()]) {
-                        setSearchQuery(displayList[viewerIndex()].name)
-                      }
+                      setSearchQuery('')
                     }}
                     class="viewer-search-input"
                     aria-label="Tìm kiếm ảnh theo tên hoặc ID annotation"

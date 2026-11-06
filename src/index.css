@@ -104,6 +104,19 @@ html, body, #root, .dark-theme {
 .anpr-tag { display:inline-block; margin:.1rem; padding:.15rem .4rem; border-radius:.35rem; background:rgba(251,191,74,.12); color:#fcd88a; }
 .anpr-empty,.anpr-error { padding:1rem; color:var(--muted); }
 .anpr-error { display:flex; gap:.5rem; color:#fda4af; }
+.dpm-sseg-project>header { margin:.25rem 0 .75rem; }
+.dpm-sseg-project h1 { font-size:clamp(1.45rem,2.5vw,2rem); }
+.dpm-sseg-controls,.dpm-sseg-results { padding:.75rem; }
+.dpm-sseg-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:.45rem; }
+.dpm-sseg-toolbar>input { width:7.25rem; min-width:0; border:1px solid var(--border); border-radius:.55rem; padding:.48rem .6rem; background:#0c1220; color:var(--text); font-size:.82rem; }
+.dpm-sseg-toolbar label { display:flex; align-items:center; gap:.3rem; white-space:nowrap; color:var(--text); font-size:.76rem; }
+.dpm-sseg-toolbar label input[type=number] { border:1px solid var(--border); border-radius:.5rem; padding:.42rem .5rem; background:#0c1220; color:var(--text); font-size:.8rem; }
+.dpm-sseg-toolbar button { display:inline-flex; align-items:center; border:1px solid rgba(34,211,238,.35); border-radius:.6rem; padding:.5rem .8rem; background:linear-gradient(120deg,#0e7490,#4338ca); color:white; font-size:.8rem; font-weight:700; cursor:pointer; white-space:nowrap; }
+.dpm-sseg-toolbar button:disabled { opacity:.55; cursor:wait; }
+.dpm-sseg-status { margin-bottom:.5rem; color:var(--muted); font-size:.75rem; }
+.dpm-sseg-results .anpr-table-wrap { max-height:max(10rem,calc(100vh - 390px)); }
+.dpm-sseg-project table { font-size:.72rem; }
+.dpm-sseg-project th,.dpm-sseg-project td { padding:.42rem; }
 @media(max-width:760px){.workspace-shell{display:block}.project-sidebar{width:auto;padding:.5rem;flex-direction:row;overflow:auto;border-right:0;border-bottom:1px solid var(--border)}.project-sidebar button{white-space:nowrap}.project-sidebar button span{font-size:.78rem}.anpr-project>header{align-items:flex-start;flex-direction:column}.anpr-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.anpr-toolbar{flex-wrap:wrap}.anpr-toolbar input{flex-basis:60%}}
 
 .app-header {

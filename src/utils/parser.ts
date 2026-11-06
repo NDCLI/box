@@ -117,6 +117,8 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
         boxes.push({
           id: finalBoxId,
           label,
+          shapeType: isMask ? 'mask' : 'rectangle',
+          maskRle: isMask ? (boxNode.getAttribute('rle') || '').split(',').map(value => Number(value.trim())).filter(Number.isFinite) : undefined,
           xtl,
           ytl,
           xbr,
@@ -150,13 +152,14 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
       const trackId = trackNode.getAttribute('id') || '';
       const label = trackNode.getAttribute('label') || 'unlabeled';
 
-      const boxNodes = trackNode.querySelectorAll('box');
+      const boxNodes = Array.from(trackNode.children).filter(node => node.tagName === 'box' || node.tagName === 'mask');
       boxNodes.forEach((boxNode, boxIdx) => {
+        const isMask = boxNode.tagName === 'mask';
         const frameId = boxNode.getAttribute('frame') || '0';
-        const xtl = parseFloat(boxNode.getAttribute('xtl') || '0');
-        const ytl = parseFloat(boxNode.getAttribute('ytl') || '0');
-        const xbr = parseFloat(boxNode.getAttribute('xbr') || '0');
-        const ybr = parseFloat(boxNode.getAttribute('ybr') || '0');
+        const xtl = parseFloat(boxNode.getAttribute(isMask ? 'left' : 'xtl') || '0');
+        const ytl = parseFloat(boxNode.getAttribute(isMask ? 'top' : 'ytl') || '0');
+        const xbr = isMask ? xtl + parseFloat(boxNode.getAttribute('width') || '0') : parseFloat(boxNode.getAttribute('xbr') || '0');
+        const ybr = isMask ? ytl + parseFloat(boxNode.getAttribute('height') || '0') : parseFloat(boxNode.getAttribute('ybr') || '0');
         const occluded = boxNode.getAttribute('occluded') === '1';
         const outside = boxNode.getAttribute('outside') === '1';
         const keyframe = boxNode.getAttribute('keyframe') === '1';
@@ -190,6 +193,8 @@ export function parseCVATXML(xmlString: string, filename: string): CVATDataset {
         frameMap[frameId].boxes.push({
           id: finalBoxId,
           label,
+          shapeType: isMask ? 'mask' : 'rectangle',
+          maskRle: isMask ? (boxNode.getAttribute('rle') || '').split(',').map(value => Number(value.trim())).filter(Number.isFinite) : undefined,
           xtl,
           ytl,
           xbr,
