@@ -16,6 +16,7 @@ files:
   - desktop/assets/**/*
 win:
   icon: desktop/assets/app-icon.ico
+  signAndEditExecutable: false
   target:
     - target: nsis
       arch:
