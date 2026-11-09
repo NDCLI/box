@@ -36,6 +36,12 @@ interface DecodedMask {
   area: number;
 }
 
+const ALLOWED_OVERLAP_LABEL_PAIRS = new Set(['head|person', 'licenseplate|vehicle']);
+
+function isAllowedLabelOverlap(labelA: string, labelB: string): boolean {
+  return ALLOWED_OVERLAP_LABEL_PAIRS.has([labelA.trim().toLowerCase(), labelB.trim().toLowerCase()].sort().join('|'));
+}
+
 function decodeMask(box: MaskShape, frame: Pick<CVATFrameData, 'width' | 'height'>): DecodedMask | null {
   if (!box.maskRle?.length) return null;
   const left = Math.round(box.xtl);
@@ -115,6 +121,7 @@ export function findMaskOverlaps(
     for (let i = 0; i < masks.length; i++) for (let j = i + 1; j < masks.length; j++) {
       const a = masks[i]; const b = masks[j];
       if (sameLabelOnly && a.box.label !== b.box.label) continue;
+      if (isAllowedLabelOverlap(a.box.label, b.box.label)) continue;
       if (a.box.xbr <= b.box.xtl || b.box.xbr <= a.box.xtl || a.box.ybr <= b.box.ytl || b.box.ybr <= a.box.ytl) continue;
       const intersectionPixels = intersectionSize(a, b);
       const smallerArea = Math.min(a.area, b.area);
