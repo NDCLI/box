@@ -22,7 +22,17 @@ jobs:
       - run: npm run desktop:build
       - run: node desktop/prepare-default-token.cjs
       - run: node desktop/prepare-default-tokens.cjs
-      - run: npx electron-builder --win portable --x64 --publish never
+      - name: Build portable package with retries
+        shell: pwsh
+        run: |
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+            npx electron-builder --win portable --x64 --publish never
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -eq 5) { exit $LASTEXITCODE }
+            $delay = 10 * $attempt
+            Write-Host "Portable build failed; retrying in $delay seconds (attempt $($attempt + 1)/5)."
+            Start-Sleep -Seconds $delay
+          }
       - name: Create checksum
         shell: pwsh
         run: |
