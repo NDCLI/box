@@ -320,6 +320,26 @@ export default function ViewerPage(props) {
     }
   }
 
+  function refreshVisibleImage() {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const host = viewerStage?.getRootNode()?.host
+      const pane = host?.closest('.imageview-pane')
+      if (disposed || !viewerStage || pane?.hidden) return
+
+      const image = viewerStage.querySelectorAll('.viewer-image')[activeBuffer() - 1]
+      const url = extractedUrls()[viewerIndex()]
+      if (!image || !url || image.getAttribute('src') !== url) return
+
+      const refresh = () => {
+        if (disposed) return
+        setViewerTx(current => ({ ...current }))
+        setPaintRevision(revision => revision + 1)
+      }
+      if (image.decode) void image.decode().then(refresh, refresh)
+      else refresh()
+    }))
+  }
+
   // Keep zoom controls centered around the middle of the viewport. This gives
   // keyboard and touch users the same predictable result as wheel zooming.
   function zoomViewerBy(factor) {
@@ -373,7 +393,21 @@ export default function ViewerPage(props) {
       if (Math.abs(viewerTx().scale - lastFitScale) < 0.01) resetViewerZoom()
     })
     if (viewerStage) observer.observe(viewerStage)
-    onCleanup(() => observer.disconnect())
+    const host = viewerStage?.getRootNode()?.host
+    const pane = host?.closest('.imageview-pane')
+    const paneObserver = pane ? new MutationObserver(() => {
+      if (!pane.hidden) refreshVisibleImage()
+    }) : null
+    paneObserver?.observe(pane, { attributes: true, attributeFilter: ['hidden'] })
+    const onVisibilityChange = () => { if (!document.hidden) refreshVisibleImage() }
+    window.addEventListener('focus', refreshVisibleImage)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    onCleanup(() => {
+      observer.disconnect()
+      paneObserver?.disconnect()
+      window.removeEventListener('focus', refreshVisibleImage)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    })
   })
 
   // Wheel zoom effect

@@ -347,7 +347,6 @@ img {
   width: 100%;
   height: 100%;
   background: #05080c;
-  will-change: transform, opacity;
   user-select: none;
   -webkit-user-drag: none;
   object-fit: fill;
