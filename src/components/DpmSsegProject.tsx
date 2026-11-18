@@ -122,10 +122,10 @@ export function DpmSsegProject({ dataset, locale, zipEntries, manualImages, cvat
           <input aria-label={en ? 'Start frame' : 'Frame bắt đầu'} type="number" min={bounds.min} max={bounds.max} value={start} placeholder={String(bounds.min)} onChange={event => { setStart(event.target.value === '' ? '' : Number(event.target.value)); invalidateResults(); }}/>
           <span className="self-center">→</span>
           <input aria-label={en ? 'End frame' : 'Frame kết thúc'} type="number" min={bounds.min} max={bounds.max} value={end} placeholder={String(bounds.max)} onChange={event => { setEnd(event.target.value === '' ? '' : Number(event.target.value)); invalidateResults(); }}/>
-          <label className="flex items-center gap-1"><input type="number" min="1" value={minSharedPixels} onChange={event => { setMinSharedPixels(Math.max(1, Number(event.target.value))); invalidateResults(); }} className="w-16"/>{en ? 'shared px min' : 'pixel giao min'}</label>
-          <label className="flex items-center gap-1"><input type="number" min="0" max="100" value={threshold} onChange={event => { setThreshold(Math.max(0, Math.min(100, Number(event.target.value)))); invalidateResults(); }} className="w-16"/>% {en ? 'of smaller mask' : 'mask nhỏ'}</label>
-          <label className="flex items-center gap-2"><input type="checkbox" checked={sameLabelOnly} onChange={event => { setSameLabelOnly(event.target.checked); invalidateResults(); }}/>{en ? 'Same label only' : 'Chỉ cùng nhãn'}</label>
-          <button onClick={runScan} disabled={isScanning || !frames.length}>{isScanning ? (en ? 'Scanning…' : 'Đang quét…') : (en ? 'Scan' : 'Quét')}</button>
+          <label className="flex items-center gap-1"><input type="number" min="1" value={minSharedPixels} onChange={event => { setMinSharedPixels(Math.max(1, Number(event.target.value))); invalidateResults(); }} className="w-16"/>{en ? 'shared px min' : 'điểm ảnh chồng lấn tối thiểu'}</label>
+          <label className="flex items-center gap-1"><input type="number" min="0" max="100" value={threshold} onChange={event => { setThreshold(Math.max(0, Math.min(100, Number(event.target.value)))); invalidateResults(); }} className="w-16"/>% {en ? 'of smaller mask' : 'diện tích mask nhỏ bị chồng lấn'}</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={sameLabelOnly} onChange={event => { setSameLabelOnly(event.target.checked); invalidateResults(); }}/>{en ? 'Same label only' : 'Chỉ so sánh cùng nhãn'}</label>
+          <button onClick={runScan} disabled={isScanning || !frames.length}>{isScanning ? (en ? 'Scanning…' : 'Đang quét…') : (en ? 'Scan' : 'Quét lỗi')}</button>
         </div>
       </div>
       <article className="anpr-card dpm-sseg-results">
