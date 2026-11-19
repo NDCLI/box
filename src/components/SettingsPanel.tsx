@@ -13,7 +13,7 @@ export default function SettingsPanel() {
     setMessage('');
     try {
       const result = await window.cvatDesktop?.checkForUpdates?.();
-      setMessage(result?.message || 'Hãy mở bản Portable Windows để kiểm tra cập nhật.');
+      setMessage(result?.available ? '' : result?.message || 'Hãy mở bản Portable Windows để kiểm tra cập nhật.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Không kiểm tra được cập nhật.'); }
     finally { setChecking(false); }
   };

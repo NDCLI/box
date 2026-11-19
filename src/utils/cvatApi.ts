@@ -39,7 +39,8 @@ declare global {
     cvatDesktop?: {
       getAppInfo?: () => Promise<{ version: string; executablePath: string; lastUpdate: { state: string; message: string; fromVersion: string; toVersion: string } | null }>;
       checkForUpdates?: () => Promise<{ message?: string; available?: boolean; version?: string }>;
-      installUpdate?: () => Promise<{ message?: string }>;
+      installUpdate?: () => Promise<{ message?: string; available?: boolean }>;
+      onUpdateProgress?: (callback: (progress: { percent: number; phase: 'download' | 'prepare' | 'restart' }) => void) => () => void;
       onUpdateAvailable?: (callback: (update: { version: string }) => void) => () => void;
       request: (request: { resource: CvatResource; serverUrl: string; token: string; taskId?: number; jobId?: number; frameId?: string; method?: 'GET' | 'PATCH'; body?: unknown }) => Promise<DesktopCvatResponse>;
       getStoredToken: (serverUrl?: string) => Promise<string | null>;

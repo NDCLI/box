@@ -4,6 +4,11 @@ contextBridge.exposeInMainWorld('cvatDesktop', {
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   checkForUpdates: () => ipcRenderer.invoke('app:update:check'),
   installUpdate: () => ipcRenderer.invoke('app:update:install'),
+  onUpdateProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on('app:update:progress', listener);
+    return () => ipcRenderer.removeListener('app:update:progress', listener);
+  },
   onUpdateAvailable: (callback) => {
     const listener = (_event, update) => callback(update);
     ipcRenderer.on('app:update:available', listener);

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const physicalFs = require('original-fs').promises;
@@ -256,21 +256,34 @@ async function checkForPortableUpdate(mode = 'automatic') {
     const asset = release.assets?.find(item => item.name === assetName);
     const checksum = release.assets?.find(item => item.name === `${asset?.name}.sha256`);
     if (!asset || !checksum || asset.size > 300 * 1024 * 1024) throw new Error('Bản phát hành chưa có đủ gói cập nhật và checksum.');
-    if (automatic) {
+    if (automatic || manual) {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) window.webContents.send('app:update:available', { version: latest });
       }
       return { available: true, version: latest };
     }
-    if (manual) {
-      const choice = await dialog.showMessageBox({ type: 'info', buttons: ['Cập nhật ngay', 'Để sau'], defaultId: 0, cancelId: 1, message: `Có bản cập nhật CVAT Tools ${latest}.`, detail: 'Ứng dụng sẽ tải bản vá và khởi động lại. PAT đã lưu được giữ trên máy này.' });
-      if (choice.response !== 0) return { message: `Có phiên bản ${latest}. Bạn đã chọn cập nhật sau.` };
-    }
     const [binaryResponse, hashResponse] = await Promise.all([fetch(asset.browser_download_url), fetch(checksum.browser_download_url)]);
     if (!binaryResponse.ok || !hashResponse.ok) throw new Error('Không tải được bản cập nhật.');
-    const binary = Buffer.from(await binaryResponse.arrayBuffer());
+    const reportProgress = (percent, phase = 'download') => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send('app:update:progress', { percent, phase });
+      }
+    };
+    if (!binaryResponse.body || !Number.isSafeInteger(asset.size) || asset.size <= 0) throw new Error('Gói cập nhật không hợp lệ.');
+    const binary = Buffer.alloc(asset.size);
+    let received = 0;
+    let percent = 0;
+    reportProgress(0);
+    for await (const chunk of binaryResponse.body) {
+      if (received + chunk.length > binary.length) throw new Error('Gói cập nhật vượt kích thước dự kiến.');
+      binary.set(chunk, received);
+      received += chunk.length;
+      const next = Math.floor(received * 100 / binary.length);
+      if (next !== percent) reportProgress(percent = next);
+    }
+    reportProgress(100, 'prepare');
     const expectedHash = (await hashResponse.text()).trim().split(/\s+/)[0].toLowerCase();
-    if (binary.length !== asset.size || crypto.createHash('sha256').update(binary).digest('hex') !== expectedHash) throw new Error('Checksum bản cập nhật không khớp.');
+    if (received !== asset.size || crypto.createHash('sha256').update(binary).digest('hex') !== expectedHash) throw new Error('Checksum bản cập nhật không khớp.');
     const target = isPortable ? process.env.PORTABLE_EXECUTABLE_FILE : path.dirname(process.execPath);
     if (!path.isAbsolute(target) || target === path.parse(target).root) throw new Error('Thư mục app không hợp lệ.');
     if (!isPortable) await physicalFs.access(path.join(target, 'resources', 'app.asar'));
@@ -379,6 +392,7 @@ try {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     if (!helperStarted) throw new Error(`Không khởi động được trình cập nhật. Nhật ký: ${launchLog}`);
+    reportProgress(100, 'restart');
     app.quit();
   } catch (error) {
     if (!helperLaunched) {
@@ -391,7 +405,7 @@ try {
         }
       }
     }
-    if (manual) throw error;
+    if (!automatic) throw error;
   }
   finally { updateCheckRunning = false; }
 }

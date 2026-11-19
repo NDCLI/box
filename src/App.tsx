@@ -36,6 +36,8 @@ export default function App() {
   const [imageViewVisited, setImageViewVisited] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<string | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<{ percent: number; phase: 'download' | 'prepare' | 'restart' }>({ percent: 0, phase: 'download' });
+  useEffect(() => window.cvatDesktop?.onUpdateProgress?.(setUpdateProgress), []);
   const [updateError, setUpdateError] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('cvat-sidebar-collapsed') !== 'false'; } catch { return true; }
@@ -71,14 +73,18 @@ export default function App() {
 
   const installAvailableUpdate = async () => {
     setInstallingUpdate(true);
+    setUpdateProgress({ percent: 0, phase: 'download' });
     setUpdateError('');
     try {
       const result = await window.cvatDesktop?.installUpdate?.();
-      if (result?.message) setUpdateError(result.message);
+      if (result?.message) throw new Error(result.message);
+      if (result?.available === false) {
+        setAvailableUpdate(null);
+        setInstallingUpdate(false);
+      }
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : 'Không cài được bản cập nhật.');
-    } finally {
       setInstallingUpdate(false);
+      setUpdateError(error instanceof Error ? error.message : 'Không cài được bản cập nhật.');
     }
   };
 
@@ -293,12 +299,19 @@ export default function App() {
       {availableUpdate && <div className="fixed right-4 top-4 z-[120] flex max-w-lg items-center gap-3 rounded-xl border border-cyan-400/40 bg-slate-950/95 px-4 py-3 text-sm shadow-2xl" role="status" aria-live="polite">
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-white">{locale === 'vi' ? `Có bản cập nhật CVAT Tools ${availableUpdate}` : `CVAT Tools ${availableUpdate} is available`}</p>
-          <p className="text-xs text-slate-300">{updateError || (locale === 'vi' ? 'Bạn có thể cập nhật ngay hoặc để sau.' : 'Update now or do it later.')}</p>
+          {installingUpdate ? <>
+            <p className="text-xs text-slate-300">
+              {updateProgress.phase === 'restart' ? (locale === 'vi' ? 'Đang khởi động lại…' : 'Restarting…')
+                : updateProgress.phase === 'prepare' ? (locale === 'vi' ? 'Đang kiểm tra và chuẩn bị bản vá…' : 'Verifying and preparing update…')
+                : (locale === 'vi' ? 'Đang tải' : 'Downloading') + ' ' + updateProgress.percent + '%'}
+            </p>
+            <progress className="mt-1 w-full" aria-label={locale === 'vi' ? 'Tiến trình tải bản cập nhật' : 'Update download progress'} max={100} value={updateProgress.percent} />
+          </> : <p className="text-xs text-slate-300">{updateError || (locale === 'vi' ? 'Bạn có thể cập nhật ngay hoặc để sau.' : 'Update now or do it later.')}</p>}
         </div>
         <button disabled={installingUpdate} onClick={() => void installAvailableUpdate()} className="shrink-0 rounded-lg bg-cyan-600 px-3 py-2 font-semibold text-white disabled:opacity-60">
-          {installingUpdate ? (locale === 'vi' ? 'Đang tải…' : 'Downloading…') : (locale === 'vi' ? 'Cập nhật' : 'Update')}
+          {locale === 'vi' ? 'Cập nhật' : 'Update'}
         </button>
-        <button onClick={() => { setAvailableUpdate(null); setUpdateError(''); }} className="shrink-0 rounded-lg border border-slate-600 px-3 py-2 text-slate-200">
+        <button disabled={installingUpdate} onClick={() => { setAvailableUpdate(null); setUpdateError(''); }} className="shrink-0 rounded-lg border border-slate-600 px-3 py-2 text-slate-200">
           {locale === 'vi' ? 'Để sau' : 'Later'}
         </button>
       </div>}
