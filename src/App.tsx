@@ -28,6 +28,7 @@ import { useLocale } from './i18n/LocaleProvider';
 import { AnprProject } from './components/AnprProject';
 import { DpmSsegProject } from './components/DpmSsegProject';
 import { LayoutDashboard, CarFront, Settings, Images, House, ChevronsLeft, ChevronsRight, ScanSearch, Download } from 'lucide-react';
+import PersonInspectionProject from './components/PersonInspectionProject';
 import SettingsPanel from './components/SettingsPanel';
 import { createCvatSource, createZipSource } from './imageview/sources';
 
@@ -39,7 +40,7 @@ interface PendingDeletePayload {
 
 export default function App() {
   const { locale } = useLocale();
-  const [project, setProject] = useState<'count' | 'anpr' | 'dpm' | 'imageview' | 'settings'>('count');
+  const [project, setProject] = useState<'count' | 'anpr' | 'dpm' | 'odcppe' | 'imageview' | 'settings'>('count');
   const [imageViewVisited, setImageViewVisited] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<string | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
@@ -162,6 +163,7 @@ export default function App() {
       } else if (fp.dataset) {
         if (key === '1') { event.preventDefault(); setProject('count'); }
         else if (key === '2') { event.preventDefault(); setProject('anpr'); }
+        else if (key === '5') { event.preventDefault(); setProject('odcppe'); }
         else if (key === '3') { event.preventDefault(); setProject('dpm'); }
         else if (key === '4') { event.preventDefault(); setImageViewVisited(true); setProject('imageview'); }
       }
@@ -482,7 +484,11 @@ export default function App() {
               </button>
               <button
                 type="button"
-                title="ImageView (Ctrl+4)"
+                title="OD/CPPE (Ctrl+5)"
+                className={project === 'odcppe' ? 'active' : ''}
+                onClick={() => setProject('odcppe')}
+              ><ScanSearch /><span>OD/CPPE</span></button>
+              <button type="button" title="ImageView (Ctrl+4)"
                 className={project === 'imageview' ? 'active' : ''}
                 onClick={() => { setImageViewVisited(true); setProject('imageview'); }}
               >
@@ -562,6 +568,8 @@ export default function App() {
 
           {project === 'imageview' ? null : project === 'settings' ? (
             <SettingsPanel />
+          ) : project === 'odcppe' ? (
+            fp.dataset && <PersonInspectionProject key={fp.dataset.filename} dataset={fp.dataset} locale={locale} />
           ) : project === 'anpr' ? (
             <AnprProject locale={locale} dataset={fp.dataset} />
           ) : project === 'dpm' ? (

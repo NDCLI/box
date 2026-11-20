@@ -49,7 +49,7 @@ function Footer({ dataset, totalDuplicates }: FooterProps) {
 
       <div className="flex shrink-0 items-center gap-3">
         <span className="hidden sm:inline dt-mono text-[10px] text-[var(--text-muted)]">
-          Ctrl+B {vi ? 'thanh bên' : 'sidebar'} · Ctrl+1–4 {vi ? 'chuyển tab' : 'switch tools'}
+          Ctrl+B {vi ? 'thanh bên' : 'sidebar'} · Ctrl+1–5 {vi ? 'chuyển tab' : 'switch tools'}
         </span>
         <span className="dt-mono text-[10px] text-[var(--text-secondary)]">
           {vi ? 'Phiên bản' : 'Version'} {version}
