@@ -45,6 +45,12 @@ const english: Record<string, string> = {
   'Lấy danh sách Task': 'Get Task list',
   'Nhập Task ID': 'Enter Task ID',
   'Lấy danh sách hoặc nhập Job ID': 'Get the list or enter a Job ID',
+  'Job ID hoặc link Job trên server đang chọn': 'Job ID or Job URL on selected server',
+  'Không khôi phục được PAT cho server này.': 'Unable to restore the saved PAT for this server.',
+  'Box & Trùng lặp': 'Box & Duplicates',
+  'ANPR biển số': 'ANPR Plates',
+  'Đóng Preview (Esc)': 'Close preview (Esc)',
+  'Di chuyển đến vị trí lỗi trên ảnh (G)': 'Move to the issue location in the image (G)',
   'Mở Job': 'Open Job',
   'Mở Task': 'Open Task',
   'Cấu hình Kiểm tra & Loại trừ Box': 'Inspection and box exclusion settings',
@@ -233,6 +239,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   });
   const textSources = useRef(new WeakMap<Text, string>());
   const attrSources = useRef(new WeakMap<Element, Map<string, string>>());
+  const prevLocaleRef = useRef<Locale>(locale);
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     try { localStorage.setItem(STORAGE_KEY, next); } catch { }
@@ -240,14 +247,22 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   const translatePage = useCallback((reconcileReactUpdates: boolean) => {
     const root = document.getElementById('root');
     if (!root) return;
+    const prevLocale = prevLocaleRef.current;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let node: Text | null;
     while ((node = walker.nextNode() as Text | null)) {
       const previous = textSources.current.get(node);
       const current = node.nodeValue ?? '';
-      const original = reconcileReactUpdates && previous !== undefined && current !== translate(previous, locale)
-        ? current
-        : (previous ?? current);
+      const reactUpdatedOnLocaleSwitch =
+        !reconcileReactUpdates &&
+        previous !== undefined &&
+        current !== translate(previous, prevLocale) &&
+        current !== previous;
+      const original =
+        reactUpdatedOnLocaleSwitch ||
+        (reconcileReactUpdates && previous !== undefined && current !== translate(previous, locale))
+          ? current
+          : (previous ?? current);
       textSources.current.set(node, original);
       const value = translate(original, locale);
       if (node.nodeValue !== value) node.nodeValue = value;
@@ -259,14 +274,22 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
         if (!element.hasAttribute(name)) continue;
         const current = element.getAttribute(name) ?? '';
         const previous = saved.get(name);
-        const original = reconcileReactUpdates && previous !== undefined && current !== translate(previous, locale)
-          ? current
-          : (previous ?? current);
+        const reactUpdatedOnLocaleSwitch =
+          !reconcileReactUpdates &&
+          previous !== undefined &&
+          current !== translate(previous, prevLocale) &&
+          current !== previous;
+        const original =
+          reactUpdatedOnLocaleSwitch ||
+          (reconcileReactUpdates && previous !== undefined && current !== translate(previous, locale))
+            ? current
+            : (previous ?? current);
         saved.set(name, original);
         const value = translate(original, locale);
         if (element.getAttribute(name) !== value) element.setAttribute(name, value);
       }
     });
+    prevLocaleRef.current = locale;
   }, [locale]);
   useEffect(() => {
     document.documentElement.lang = locale;

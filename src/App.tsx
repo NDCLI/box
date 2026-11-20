@@ -15,6 +15,7 @@ import FileInfoBar from './components/FileInfoBar';
 import ConfigPanel from './components/ConfigPanel';
 import StatsGrid from './components/StatsGrid';
 import DuplicateList from './components/DuplicateList';
+import ConfirmDialog, { type DeleteConfirmationState } from './components/ui/ConfirmDialog';
 
 const PreviewModal = lazy(() => import('./components/PreviewModal'));
 const ImageViewProject = lazy(() => import('./components/ImageViewProject'));
@@ -22,13 +23,19 @@ const ImageViewProject = lazy(() => import('./components/ImageViewProject'));
 // Utils
 import { removeDuplicatesFromXML, generateCSVReport } from './utils/parser';
 import { deleteCvatJobShapes, loadCvatJobDataset, loadCvatTaskDataset } from './utils/cvatApi';
-import type { DuplicateGroup } from './types';
-import { translate, useLocale } from './i18n/LocaleProvider';
+import type { CVATBox, DuplicateGroup } from './types';
+import { useLocale } from './i18n/LocaleProvider';
 import { AnprProject } from './components/AnprProject';
 import { DpmSsegProject } from './components/DpmSsegProject';
-import { LayoutDashboard, CarFront, Settings, Images, House, ChevronsLeft, ChevronsRight, ScanSearch } from 'lucide-react';
+import { LayoutDashboard, CarFront, Settings, Images, House, ChevronsLeft, ChevronsRight, ScanSearch, Download } from 'lucide-react';
 import SettingsPanel from './components/SettingsPanel';
 import { createCvatSource, createZipSource } from './imageview/sources';
+
+interface PendingDeletePayload {
+  confirmation: DeleteConfirmationState;
+  deleteBoxes: CVATBox[];
+  keepBoxes: CVATBox[];
+}
 
 export default function App() {
   const { locale } = useLocale();
@@ -42,6 +49,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('cvat-sidebar-collapsed') !== 'false'; } catch { return true; }
   });
+
   // ── Exclude labels (persisted to localStorage) ──
   const [excludeLabels, setExcludeLabels] = useState<string[]>(() => {
     try {
@@ -54,15 +62,17 @@ export default function App() {
   const saveExcludeLabels = useCallback((labels: string[]) => {
     setExcludeLabels(labels);
     try {
-      localStorage.setItem("excludeLabels", JSON.stringify(labels));
+      localStorage.setItem('excludeLabels', JSON.stringify(labels));
     } catch { }
   }, []);
 
-  // ── Manual images mapping ──
+  // ── Manual images mapping & active CVAT session ──
   const [manualImages, setManualImages] = useState<Record<string, string>>({});
   const [cvatFrameSource, setCvatFrameSource] = useState<CvatFrameSource | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isRefreshingJob, setIsRefreshingJob] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PendingDeletePayload | null>(null);
+  const [isDeletingShapes, setIsDeletingShapes] = useState(false);
   const refreshRequest = useRef(0);
   const restorePreviewFrameRef = useRef<string | null>(null);
 
@@ -127,9 +137,42 @@ export default function App() {
     }
   }, [detection.duplicateGroups, fp.dataset]);
 
+  // ── Global desktop keyboard shortcuts ──
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('cvat-sidebar-collapsed', String(next)); } catch { /* Optional preference. */ }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) return;
+
+      const key = event.key.toLowerCase();
+      if (key === 'b') {
+        event.preventDefault();
+        toggleSidebar();
+      } else if (event.key === ',') {
+        event.preventDefault();
+        setProject((curr) => (curr === 'settings' ? 'count' : 'settings'));
+      } else if (fp.dataset) {
+        if (key === '1') { event.preventDefault(); setProject('count'); }
+        else if (key === '2') { event.preventDefault(); setProject('anpr'); }
+        else if (key === '3') { event.preventDefault(); setProject('dpm'); }
+        else if (key === '4') { event.preventDefault(); setImageViewVisited(true); setProject('imageview'); }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [fp.dataset, toggleSidebar]);
+
   const isDesktopJob = Boolean(cvatFrameSource?.jobId && fp.dataset?.source === 'cvat' && fp.dataset.cvatContext?.jobId);
 
-  const handleDeleteGroups = useCallback(async (groups: DuplicateGroup[], source: 'list' | 'preview' = 'list') => {
+  const handleDeleteGroups = useCallback((groups: DuplicateGroup[], source: 'list' | 'preview' = 'list') => {
     if (!isDesktopJob || !cvatFrameSource?.jobId || !fp.dataset?.cvatContext) {
       fp.setError('Xóa box chỉ dùng được khi mở một Job CVAT trên bản desktop.');
       return;
@@ -155,8 +198,23 @@ export default function App() {
       return;
     }
     const frames = [...new Set(groups.map(group => group.frameId))].sort((a, b) => Number(a) - Number(b));
-    const message = `Job #${cvatFrameSource.jobId}\nFrame: ${frames.join(', ')}\nSẽ xóa ${uniqueDelete.length} Shape.\n\nTiếp tục?`;
-    if (!window.confirm(translate(message, locale))) return;
+    setPendingDelete({
+      confirmation: {
+        jobId: cvatFrameSource.jobId,
+        frames,
+        deleteCount: uniqueDelete.length,
+        keepCount: uniqueKeep.length,
+        source,
+      },
+      deleteBoxes: uniqueDelete,
+      keepBoxes: uniqueKeep,
+    });
+  }, [cvatFrameSource, detection.selectionByBoxId, fp, isDesktopJob]);
+
+  const executeConfirmedDelete = useCallback(async () => {
+    if (!pendingDelete || !cvatFrameSource?.jobId) return;
+    const { confirmation, deleteBoxes, keepBoxes } = pendingDelete;
+    setIsDeletingShapes(true);
     fp.setError(null);
     fp.setSuccessMsg(null);
     try {
@@ -164,22 +222,26 @@ export default function App() {
         cvatFrameSource.connection,
         cvatFrameSource.taskId,
         cvatFrameSource.jobId,
-        uniqueDelete,
-        uniqueKeep,
+        deleteBoxes,
+        keepBoxes,
       );
       restorePreviewFrameRef.current = detection.selectedFrameData?.id ?? null;
+      setPendingDelete(null);
       try {
         const refreshed = await loadCvatJobDataset(cvatFrameSource.connection, cvatFrameSource.taskId, cvatFrameSource.jobId);
         fp.loadDataset(refreshed);
-        fp.setSuccessMsg(`Đã xác minh xóa ${result.deletedShapeIds.length} Shape trên CVAT. Bản sao đã lưu tại ${result.backupPath}${source === 'preview' ? ' (nhóm đang xem).' : '.'}`);
+        fp.setSuccessMsg(`Đã xác minh xóa ${result.deletedShapeIds.length} Shape trên CVAT. Bản sao đã lưu tại ${result.backupPath}${confirmation.source === 'preview' ? ' (nhóm đang xem).' : '.'}`);
       } catch (refreshError) {
         restorePreviewFrameRef.current = null;
         fp.setError(`Đã xác minh xóa ${result.deletedShapeIds.length} Shape trên CVAT nhưng chưa tải lại được giao diện: ${refreshError instanceof Error ? refreshError.message : 'lỗi mạng'}. Hãy bấm Tải lại Job.`);
       }
     } catch (err) {
+      setPendingDelete(null);
       fp.setError(err instanceof Error ? err.message : 'Không thể xóa Shape trên CVAT.');
+    } finally {
+      setIsDeletingShapes(false);
     }
-  }, [cvatFrameSource, detection.selectionByBoxId, fp, isDesktopJob, locale]);
+  }, [cvatFrameSource, detection.selectedFrameData?.id, fp, pendingDelete]);
 
   // ── Extended reset (clean up manual images too) ──
   const handleReset = useCallback(() => {
@@ -187,6 +249,7 @@ export default function App() {
     setProject('count');
     setImageViewVisited(false);
     setIsRefreshingJob(false);
+    setPendingDelete(null);
     fp.resetState();
     setCvatFrameSource(null);
     setIsPreviewOpen(false);
@@ -240,7 +303,7 @@ export default function App() {
     detection.setSelectedLabels(fp.dataset.labels);
   }, [fp.dataset, detection]);
 
-  // ── Download cleaned XML ──
+  // ── Download cleaned XML (preserved) ──
   const handleDownloadCleanedXML = useCallback(() => {
     if (!fp.dataset || !fp.xmlContent) return;
     try {
@@ -260,7 +323,7 @@ export default function App() {
     }
   }, [fp, detection]);
 
-  // ── Download CSV report ──
+  // ── Download CSV report (preserved) ──
   const handleDownloadCSVReport = useCallback(() => {
     if (detection.duplicateGroups.length === 0) return;
     try {
@@ -280,7 +343,7 @@ export default function App() {
     }
   }, [fp, detection, locale]);
 
-  // Preserve download utilities for future UI integration
+  // Preserve download utilities without altering existing business behavior
   void handleDownloadCleanedXML;
   void handleDownloadCSVReport;
 
@@ -290,75 +353,189 @@ export default function App() {
     }
     if (fp.file?.name.toLowerCase().endsWith('.zip')) return createZipSource(fp.file, fp.dataset || undefined);
     throw new Error(locale === 'vi' ? 'File XML chỉ có annotation, không chứa ảnh. Hãy chọn nguồn CVAT hoặc ZIP có ảnh tại Trang chính.' : 'XML contains annotations only. Choose CVAT or a ZIP with images on Home.');
-  }, [cvatFrameSource, fp.dataset, fp.file]);
+  }, [cvatFrameSource, fp.dataset, fp.file, locale]);
+
+  // Preview modal prev/next navigation across filtered duplicate groups
+  const selectedGroupIndex = detection.selectedGroup
+    ? detection.filteredDuplicateGroups.findIndex((g) => g.id === detection.selectedGroup!.id)
+    : -1;
+
+  const handleNavigatePreview = useCallback((direction: -1 | 1) => {
+    if (selectedGroupIndex < 0) return;
+    const nextIndex = selectedGroupIndex + direction;
+    const target = detection.filteredDuplicateGroups[nextIndex];
+    if (target) detection.setSelectedGroupId(target.id);
+  }, [detection, selectedGroupIndex]);
+
+  const duplicateBadge = detection.duplicateGroups.length > 0
+    ? (detection.duplicateGroups.length > 999 ? '999+' : String(detection.duplicateGroups.length))
+    : undefined;
 
   // ── Render ──
   return (
-    <div className={`app-shell ${project === 'imageview' ? 'is-preview' : ''} dark-theme min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased`}>
-      <Header />
-      {availableUpdate && <div className="fixed right-4 top-4 z-[120] flex max-w-lg items-center gap-3 rounded-xl border border-cyan-400/40 bg-slate-950/95 px-4 py-3 text-sm shadow-2xl" role="status" aria-live="polite">
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-white">{locale === 'vi' ? `Có bản cập nhật CVAT Tools ${availableUpdate}` : `CVAT Tools ${availableUpdate} is available`}</p>
-          {installingUpdate ? <>
-            <p className="text-xs text-slate-300">
-              {updateProgress.phase === 'restart' ? (locale === 'vi' ? 'Đang khởi động lại…' : 'Restarting…')
-                : updateProgress.phase === 'prepare' ? (locale === 'vi' ? 'Đang kiểm tra và chuẩn bị bản vá…' : 'Verifying and preparing update…')
-                : (locale === 'vi' ? 'Đang tải' : 'Downloading') + ' ' + updateProgress.percent + '%'}
+    <div className={`app-shell ${project === 'imageview' ? 'is-preview' : ''}`}>
+      <Header dataset={fp.dataset} cvatFrameSource={cvatFrameSource} activeProject={project} />
+
+      {availableUpdate && (
+        <div
+          className="fixed right-4 top-14 z-[120] flex max-w-md items-center gap-3 rounded-xl border border-[var(--status-info-border)] bg-[var(--bg-surface)] px-4 py-3 text-xs shadow-[var(--shadow-popover)]"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--status-info-subtle)] text-[var(--status-info)]">
+            <Download className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-[var(--text-primary)]">
+              {locale === 'vi' ? `Có bản cập nhật CVAT Tools ${availableUpdate}` : `CVAT Tools ${availableUpdate} is available`}
             </p>
-            <progress className="mt-1 w-full" aria-label={locale === 'vi' ? 'Tiến trình tải bản cập nhật' : 'Update download progress'} max={100} value={updateProgress.percent} />
-          </> : <p className="text-xs text-slate-300">{updateError || (locale === 'vi' ? 'Bạn có thể cập nhật ngay hoặc để sau.' : 'Update now or do it later.')}</p>}
+            {installingUpdate ? (
+              <>
+                <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">
+                  {updateProgress.phase === 'restart'
+                    ? (locale === 'vi' ? 'Đang khởi động lại…' : 'Restarting…')
+                    : updateProgress.phase === 'prepare'
+                      ? (locale === 'vi' ? 'Đang kiểm tra và chuẩn bị bản vá…' : 'Verifying and preparing update…')
+                      : `${locale === 'vi' ? 'Đang tải' : 'Downloading'} ${updateProgress.percent}%`}
+                </p>
+                <progress
+                  className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full"
+                  aria-label={locale === 'vi' ? 'Tiến trình tải bản cập nhật' : 'Update download progress'}
+                  max={100}
+                  value={updateProgress.percent}
+                />
+              </>
+            ) : (
+              <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">
+                {updateError || (locale === 'vi' ? 'Bạn có thể cập nhật ngay hoặc để sau.' : 'Update now or do it later.')}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button disabled={installingUpdate} onClick={() => void installAvailableUpdate()} className="dt-btn dt-btn-primary dt-btn-sm">
+              {locale === 'vi' ? 'Cập nhật' : 'Update'}
+            </button>
+            <button disabled={installingUpdate} onClick={() => { setAvailableUpdate(null); setUpdateError(''); }} className="dt-btn dt-btn-secondary dt-btn-sm">
+              {locale === 'vi' ? 'Để sau' : 'Later'}
+            </button>
+          </div>
         </div>
-        <button disabled={installingUpdate} onClick={() => void installAvailableUpdate()} className="shrink-0 rounded-lg bg-cyan-600 px-3 py-2 font-semibold text-white disabled:opacity-60">
-          {locale === 'vi' ? 'Cập nhật' : 'Update'}
-        </button>
-        <button disabled={installingUpdate} onClick={() => { setAvailableUpdate(null); setUpdateError(''); }} className="shrink-0 rounded-lg border border-slate-600 px-3 py-2 text-slate-200">
-          {locale === 'vi' ? 'Để sau' : 'Later'}
-        </button>
-      </div>}
+      )}
 
-      <div className="workspace-shell flex-1">
-      <nav className={`project-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`} aria-label="Projects">
-        <button className="sidebar-toggle" aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} title={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} aria-expanded={!sidebarCollapsed} onClick={() => {
-          const next = !sidebarCollapsed; setSidebarCollapsed(next);
-          try { localStorage.setItem('cvat-sidebar-collapsed', String(next)); } catch { /* Optional preference. */ }
-        }}>{sidebarCollapsed ? <ChevronsRight/> : <ChevronsLeft/>}<span>{locale === 'vi' ? 'Thu gọn' : 'Collapse'}</span></button>
-        {!fp.dataset ? <button title={locale === 'vi' ? 'Trang chính' : 'Home'} className={project !== 'settings' ? 'active' : ''} onClick={() => setProject('count')}><House/><span>{locale === 'vi' ? 'Trang chính' : 'Home'}</span></button> : <>
-          <button title="Box & Trùng lặp" className={project === 'count' ? 'active' : ''} onClick={() => setProject('count')}><LayoutDashboard/><span>Box &amp; Trùng lặp</span></button>
-          <button title="ANPR biển số" className={project === 'anpr' ? 'active' : ''} onClick={() => setProject('anpr')}><CarFront/><span>ANPR biển số</span></button>
-          <button title="DPM / SSEG" className={project === 'dpm' ? 'active' : ''} onClick={() => setProject('dpm')}><ScanSearch/><span>DPM / SSEG</span></button>
-          <button title="ImageView" className={project === 'imageview' ? 'active' : ''} onClick={() => { setImageViewVisited(true); setProject('imageview'); }}><Images/><span>ImageView</span></button>
-        </>}
-        <button title={locale === 'vi' ? 'Cài đặt' : 'Settings'} className={project === 'settings' ? 'active' : ''} onClick={() => setProject(project === 'settings' ? 'count' : 'settings')}><Settings/><span>{locale === 'vi' ? 'Cài đặt' : 'Settings'}</span></button>
-      </nav>
-      <main className={`app-main ${project === 'imageview' ? 'app-main-preview' : ''} flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6`}>
-        {/* Upload Zone (shown when no dataset loaded) */}
-        <div hidden={Boolean(fp.dataset) || project === 'settings'} data-testid="shared-source">
-          <h2 className="mb-4 text-xl font-bold">{locale === 'vi' ? 'Trang chính · Chọn nguồn dữ liệu' : 'Home · Choose a data source'}</h2>
-          <UploadZone
-            isDragging={fp.isDragging}
-            fileInputRef={fp.fileInputRef}
-            onUploadClick={fp.handleUploadClick}
-            onFileChange={(event) => { setCvatFrameSource(null); void fp.handleFileChange(event); }}
-            onDragOver={fp.handleDragOver}
-            onDragLeave={fp.handleDragLeave}
-            onDrop={(event) => { setCvatFrameSource(null); void fp.handleDrop(event); }}
-            onCvatDatasetLoaded={(dataset, connection, taskId, jobId) => {
-              setCvatFrameSource({ connection, taskId, jobId });
-              fp.loadDataset(dataset);
-            }}
+      <div className="workspace-shell">
+        <nav className={`project-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`} aria-label="Projects">
+          <button
+            type="button"
+            className="sidebar-toggle"
+            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
+            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu gọn thanh bên (Ctrl+B)'}
+            aria-expanded={!sidebarCollapsed}
+            onClick={toggleSidebar}
+          >
+            {sidebarCollapsed ? <ChevronsRight /> : <ChevronsLeft />}
+            <span>{locale === 'vi' ? 'Thu gọn' : 'Collapse'}</span>
+          </button>
+
+          {!fp.dataset ? (
+            <>
+              <div className="project-sidebar-group-label">{locale === 'vi' ? 'Nguồn dữ liệu' : 'Data Source'}</div>
+              <button
+                type="button"
+                title={locale === 'vi' ? 'Trang chính' : 'Home'}
+                className={project !== 'settings' ? 'active' : ''}
+                onClick={() => setProject('count')}
+              >
+                <House />
+                <span>{locale === 'vi' ? 'Trang chính' : 'Home'}</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="project-sidebar-group-label">{locale === 'vi' ? 'Công cụ QA' : 'QA Workspace'}</div>
+              <button
+                type="button"
+                title="Box & Trùng lặp (Ctrl+1)"
+                data-badge={duplicateBadge}
+                className={project === 'count' ? 'active' : ''}
+                onClick={() => setProject('count')}
+              >
+                <LayoutDashboard />
+                <span>Box &amp; Trùng lặp</span>
+              </button>
+              <button
+                type="button"
+                title="ANPR biển số (Ctrl+2)"
+                className={project === 'anpr' ? 'active' : ''}
+                onClick={() => setProject('anpr')}
+              >
+                <CarFront />
+                <span>ANPR biển số</span>
+              </button>
+              <button
+                type="button"
+                title="DPM / SSEG (Ctrl+3)"
+                className={project === 'dpm' ? 'active' : ''}
+                onClick={() => setProject('dpm')}
+              >
+                <ScanSearch />
+                <span>DPM / SSEG</span>
+              </button>
+              <button
+                type="button"
+                title="ImageView (Ctrl+4)"
+                className={project === 'imageview' ? 'active' : ''}
+                onClick={() => { setImageViewVisited(true); setProject('imageview'); }}
+              >
+                <Images />
+                <span>ImageView</span>
+              </button>
+            </>
+          )}
+
+          <div className="project-sidebar-spacer" />
+
+          <div className="project-sidebar-group-label">{locale === 'vi' ? 'Hệ thống' : 'System'}</div>
+          <button
+            type="button"
+            title={locale === 'vi' ? 'Cài đặt (Ctrl+,)' : 'Settings (Ctrl+,)'}
+            data-dot={availableUpdate ? 'update' : undefined}
+            className={project === 'settings' ? 'active' : ''}
+            onClick={() => setProject(project === 'settings' ? 'count' : 'settings')}
+          >
+            <Settings />
+            <span>{locale === 'vi' ? 'Cài đặt' : 'Settings'}</span>
+          </button>
+        </nav>
+
+        <main className={`app-main ${project === 'imageview' ? 'app-main-preview' : ''}`}>
+          {/* Upload Zone (kept mounted via hidden so CVAT task/job lists survive close) */}
+          <div hidden={Boolean(fp.dataset) || project === 'settings'} data-testid="shared-source" className="w-full">
+            <UploadZone
+              isDragging={fp.isDragging}
+              fileInputRef={fp.fileInputRef}
+              onUploadClick={fp.handleUploadClick}
+              onFileChange={(event) => { setCvatFrameSource(null); void fp.handleFileChange(event); }}
+              onDragOver={fp.handleDragOver}
+              onDragLeave={fp.handleDragLeave}
+              onDrop={(event) => { setCvatFrameSource(null); void fp.handleDrop(event); }}
+              onCvatDatasetLoaded={(dataset, connection, taskId, jobId) => {
+                setCvatFrameSource({ connection, taskId, jobId });
+                fp.loadDataset(dataset);
+              }}
+            />
+          </div>
+
+          {/* Status banners */}
+          <StatusBanners
+            isLoading={fp.isLoading}
+            error={fp.error}
+            successMsg={project === 'imageview' ? null : fp.successMsg}
+            onDismissError={() => fp.setError(null)}
+            onDismissSuccess={() => fp.setSuccessMsg(null)}
           />
-        </div>
 
-        {/* Status banners */}
-        <StatusBanners
-          isLoading={fp.isLoading}
-          error={fp.error}
-          successMsg={project === 'imageview' ? null : fp.successMsg}
-          onDismissError={() => fp.setError(null)}
-          onDismissSuccess={() => fp.setSuccessMsg(null)}
-        />
-
-        {fp.dataset && project !== 'settings' && <FileInfoBar
+          {fp.dataset && project !== 'settings' && (
+            <FileInfoBar
               jobImageCache={jobImageCache}
               compact={project === 'imageview'}
               file={fp.file}
@@ -372,76 +549,99 @@ export default function App() {
               cvatScope={cvatFrameSource?.jobId ? 'Job' : 'Task'}
               isRefreshingJob={isRefreshingJob}
               onOpenBackupFolder={project === 'count' && isDesktopJob ? () => void window.cvatDesktop?.openBackupFolder?.() : undefined}
-            />}
-        {fp.dataset && imageViewVisited && <div className="imageview-pane" hidden={project !== 'imageview'}><Suspense fallback={<p>Đang mở ImageView…</p>}><ImageViewProject createSource={createSharedViewerSource} /></Suspense></div>}
-        {project === 'imageview' ? null : project === 'settings' ? <SettingsPanel /> : project === 'anpr' ? <AnprProject locale={locale} dataset={fp.dataset} /> : project === 'dpm' ? <DpmSsegProject locale={locale} dataset={fp.dataset} zipEntries={fp.zipEntries} manualImages={manualImages} cvatFrameSource={cvatFrameSource} /> : <>
-        {/* Main application interface */}
-        {fp.dataset && project === 'count' && (
-          <div className="space-y-6">
-            <ConfigPanel
-              frameRange={detection.frameRange}
-              frameRangeStart={detection.frameRangeStart}
-              frameRangeEnd={detection.frameRangeEnd}
-              onFrameRangeStartChange={(v) => detection.setFrameRangeStart(v)}
-              onFrameRangeEndChange={(v) => detection.setFrameRangeEnd(v)}
-              excludeLabels={excludeLabels}
-              onSaveExcludeLabels={saveExcludeLabels}
-              skipFrameFilterEnabled={skipFrameFilterEnabled}
-              onSkipFrameFilterEnabledChange={setSkipFrameFilterEnabled}
-              settings={detection.settings}
-              onSettingsChange={detection.setSettings}
             />
+          )}
 
-            <StatsGrid stats={detection.stats} />
+          {fp.dataset && imageViewVisited && (
+            <div className="imageview-pane" hidden={project !== 'imageview'}>
+              <Suspense fallback={<p className="text-xs text-[var(--text-secondary)]">Đang mở ImageView…</p>}>
+                <ImageViewProject createSource={createSharedViewerSource} />
+              </Suspense>
+            </div>
+          )}
 
-            <DuplicateList
+          {project === 'imageview' ? null : project === 'settings' ? (
+            <SettingsPanel />
+          ) : project === 'anpr' ? (
+            <AnprProject locale={locale} dataset={fp.dataset} />
+          ) : project === 'dpm' ? (
+            <DpmSsegProject
+              locale={locale}
               dataset={fp.dataset}
-              duplicateGroups={detection.duplicateGroups}
-              filteredDuplicateGroups={detection.filteredDuplicateGroups}
-              baseFilteredGroups={detection.baseFilteredGroups}
-              paginatedGroups={detection.paginatedGroups}
-              searchTerm={detection.searchTerm}
-              onSearchTermChange={(v) => detection.setSearchTerm(v)}
-              selectedLabels={detection.selectedLabels}
-              onLabelToggle={handleLabelToggle}
-              onSelectAllLabels={handleSelectAllLabels}
-              selectedGroupId={detection.selectedGroupId}
-              onSelectGroup={(id) => { setIsPreviewOpen(false); detection.setSelectedGroupId(id); }}
-              selectedGroupIds={detection.selectedGroupIds}
-              onToggleGroup={(id) => detection.setSelectedGroupIds(ids => ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id])}
-              selectionByBoxId={detection.selectionByBoxId}
-              onBoxSelection={detection.setBoxSelection}
-              onDeleteSelected={() => void handleDeleteGroups(detection.duplicateGroups.filter(group =>
-                detection.selectedGroupIds.includes(group.id) ||
-                group.boxes.some(box => detection.selectionByBoxId[box.id] === 'delete')
-              ))}
-              canDelete={isDesktopJob}
-              currentPage={detection.currentPage}
-              totalPages={detection.totalPages}
-              onPageChange={(p) => detection.setCurrentPage(p)}
-              itemsPerPage={detection.itemsPerPage}
-              settings={detection.settings}
-              quickReviewGroup={detection.selectedGroup}
-              quickReviewFrameData={detection.selectedFrameData}
-              quickReviewImageSrc={frameImage.currentImageSrc}
-              quickReviewImageLoading={frameImage.imageLoading}
-              quickReviewImageError={frameImage.imageError}
-              quickReviewImageDimensions={frameImage.imageDimensions}
-              onOpenPreview={() => setIsPreviewOpen(true)}
+              zipEntries={fp.zipEntries}
+              manualImages={manualImages}
+              cvatFrameSource={cvatFrameSource}
             />
-          </div>
-        )}
-        </>}
-      </main>
+          ) : (
+            fp.dataset && project === 'count' && (
+              <div className="flex flex-col gap-3">
+                <StatsGrid stats={detection.stats} />
+
+                <ConfigPanel
+                  frameRange={detection.frameRange}
+                  frameRangeStart={detection.frameRangeStart}
+                  frameRangeEnd={detection.frameRangeEnd}
+                  onFrameRangeStartChange={(v) => detection.setFrameRangeStart(v)}
+                  onFrameRangeEndChange={(v) => detection.setFrameRangeEnd(v)}
+                  excludeLabels={excludeLabels}
+                  onSaveExcludeLabels={saveExcludeLabels}
+                  skipFrameFilterEnabled={skipFrameFilterEnabled}
+                  onSkipFrameFilterEnabledChange={setSkipFrameFilterEnabled}
+                  settings={detection.settings}
+                  onSettingsChange={detection.setSettings}
+                />
+
+                <DuplicateList
+                  dataset={fp.dataset}
+                  duplicateGroups={detection.duplicateGroups}
+                  filteredDuplicateGroups={detection.filteredDuplicateGroups}
+                  baseFilteredGroups={detection.baseFilteredGroups}
+                  paginatedGroups={detection.paginatedGroups}
+                  searchTerm={detection.searchTerm}
+                  onSearchTermChange={(v) => detection.setSearchTerm(v)}
+                  selectedLabels={detection.selectedLabels}
+                  onLabelToggle={handleLabelToggle}
+                  onSelectAllLabels={handleSelectAllLabels}
+                  selectedGroupId={detection.selectedGroupId}
+                  onSelectGroup={(id) => { setIsPreviewOpen(false); detection.setSelectedGroupId(id); }}
+                  selectedGroupIds={detection.selectedGroupIds}
+                  onToggleGroup={(id) => detection.setSelectedGroupIds(ids => ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id])}
+                  selectionByBoxId={detection.selectionByBoxId}
+                  onBoxSelection={detection.setBoxSelection}
+                  onDeleteSelected={() => handleDeleteGroups(detection.duplicateGroups.filter(group =>
+                    detection.selectedGroupIds.includes(group.id) ||
+                    group.boxes.some(box => detection.selectionByBoxId[box.id] === 'delete')
+                  ))}
+                  onDeleteGroup={(group) => handleDeleteGroups([group], 'list')}
+                  canDelete={isDesktopJob}
+                  currentPage={detection.currentPage}
+                  totalPages={detection.totalPages}
+                  onPageChange={(p) => detection.setCurrentPage(p)}
+                  itemsPerPage={detection.itemsPerPage}
+                  settings={detection.settings}
+                  quickReviewGroup={detection.selectedGroup}
+                  quickReviewFrameData={detection.selectedFrameData}
+                  quickReviewImageSrc={frameImage.currentImageSrc}
+                  quickReviewImageLoading={frameImage.imageLoading}
+                  quickReviewImageError={frameImage.imageError}
+                  quickReviewImageDimensions={frameImage.imageDimensions}
+                  onOpenPreview={() => setIsPreviewOpen(true)}
+                />
+              </div>
+            )
+          )}
+        </main>
       </div>
 
       {/* Preview Modal */}
       {isPreviewOpen && detection.selectedGroup && detection.selectedFrameData && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/80 text-sm font-semibold text-slate-200">
-            Đang mở trình xem ảnh…
-          </div>
-        }>
+        <Suspense
+          fallback={
+            <div className="dt-modal-backdrop fixed inset-0 z-[100] grid place-items-center text-xs font-semibold text-[var(--text-primary)]">
+              Đang mở trình xem ảnh…
+            </div>
+          }
+        >
           <PreviewModal
             selectedGroup={detection.selectedGroup}
             selectedFrameData={detection.selectedFrameData}
@@ -456,13 +656,29 @@ export default function App() {
             selectionByBoxId={detection.selectionByBoxId}
             onBoxSelection={detection.setBoxSelection}
             canDelete={isDesktopJob}
-            onDelete={() => void handleDeleteGroups([detection.selectedGroup!], 'preview')}
+            onDelete={() => handleDeleteGroups([detection.selectedGroup!], 'preview')}
+            onPrevGroup={selectedGroupIndex > 0 ? () => handleNavigatePreview(-1) : undefined}
+            onNextGroup={
+              selectedGroupIndex >= 0 && selectedGroupIndex < detection.filteredDuplicateGroups.length - 1
+                ? () => handleNavigatePreview(1)
+                : undefined
+            }
+            groupPosition={selectedGroupIndex >= 0 ? { index: selectedGroupIndex + 1, total: detection.filteredDuplicateGroups.length } : undefined}
             onClose={() => { setIsPreviewOpen(false); detection.setSelectedGroupId(null); }}
           />
         </Suspense>
       )}
 
-      {project !== 'imageview' && <Footer />}
+      {/* Desktop Destructive Confirmation Dialog */}
+      <ConfirmDialog
+        confirmation={pendingDelete?.confirmation ?? null}
+        locale={locale}
+        isSubmitting={isDeletingShapes}
+        onCancel={() => { if (!isDeletingShapes) setPendingDelete(null); }}
+        onConfirm={() => void executeConfirmedDelete()}
+      />
+
+      {project !== 'imageview' && <Footer dataset={fp.dataset} totalDuplicates={detection.stats.totalDuplicates} />}
     </div>
   );
 }

@@ -1,7 +1,17 @@
-import { CloudDownload, KeyRound, ListChecks, LoaderCircle } from 'lucide-react';
+import { CloudDownload, KeyRound, ListChecks, LoaderCircle, Lock, Server, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CVATDataset } from '../types';
-import { getCvatJobTaskId, listCvatJobs, listCvatTasks, loadCvatJobDataset, loadCvatTaskDataset, type CvatConnection, type CvatJobSummary, type CvatTaskSummary } from '../utils/cvatApi';
+import {
+  getCvatJobTaskId,
+  listCvatJobs,
+  listCvatTasks,
+  loadCvatJobDataset,
+  loadCvatTaskDataset,
+  type CvatConnection,
+  type CvatJobSummary,
+  type CvatTaskSummary,
+} from '../utils/cvatApi';
+import StatusPill from './ui/StatusPill';
 
 const DEFAULT_SERVERS = [
   'http://10.43.2.147:8080',
@@ -138,76 +148,207 @@ export default function CvatConnectPanel({ onDatasetLoaded }: CvatConnectPanelPr
     }
   };
 
+  const patTone = !desktopAvailable
+    ? 'warning'
+    : isTokenRestoring
+      ? 'info'
+      : token
+        ? 'success'
+        : hasDefaultToken
+          ? 'warning'
+          : 'neutral';
+
   return (
-    <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left shadow-xs">
-      <div className="flex items-start gap-3">
-        <span className="rounded-xl bg-blue-50 p-2.5 text-blue-600"><CloudDownload className="h-5 w-5" /></span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-bold text-slate-900">Đọc trực tiếp từ CVAT</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Mở một Job hoặc cả Task để kiểm tra annotation từ CVAT.</p>
+    <section className="dt-panel overflow-hidden text-left">
+      {/* Panel Header */}
+      <div className="dt-panel-header bg-[var(--bg-surface-elevated)]">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--accent-border)] bg-[var(--accent-subtle)] text-[var(--accent-primary)]">
+            <Server className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Đọc trực tiếp từ CVAT</h2>
+            <p className="text-xs text-[var(--text-secondary)]">Mở một Job hoặc cả Task để kiểm tra annotation từ CVAT.</p>
+          </div>
         </div>
+
+        <StatusPill tone={patTone} dot pulse={isTokenRestoring}>
+          <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span>
+            {!desktopAvailable
+              ? 'Desktop only'
+              : isTokenRestoring
+                ? 'Đang khôi phục PAT đã lưu…'
+                : token
+                  ? 'PAT DPAPI'
+                  : hasDefaultToken
+                    ? 'Default PAT'
+                    : 'No PAT'}
+          </span>
+        </StatusPill>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="text-xs font-semibold text-slate-600">
-          Server CVAT mặc định
-          <select value={DEFAULT_SERVERS.includes(serverUrl) ? serverUrl : ''} onChange={(event) => setServerUrl(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-            {DEFAULT_SERVERS.map((server) => <option key={server} value={server}>{server}</option>)}
-            {!DEFAULT_SERVERS.includes(serverUrl) && <option value="">URL tùy chỉnh</option>}
-          </select>
-          <span className="mt-1.5 block text-[11px] font-normal text-slate-500">Hoặc nhập URL tùy chỉnh:</span>
-          <input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} placeholder="https://cvat.example.com" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" autoComplete="url" />
-        </label>
-        <label className="text-xs font-semibold text-slate-600">
-          Personal Access Token (đọc và xóa Shape trong Job)
-          <input value={token} onChange={(event) => setToken(event.target.value)} onBlur={saveCurrentToken} placeholder="Dán token CVAT" type="password" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" autoComplete="off" />
-          {token && <span className="ml-3 text-[11px] font-medium text-slate-500">Đã nhập: {token.length} ký tự</span>}
-        </label>
+      {/* Step 1: Server & PAT */}
+      <div className="space-y-4 p-4 sm:p-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+              Server CVAT mặc định
+              <select
+                value={DEFAULT_SERVERS.includes(serverUrl) ? serverUrl : ''}
+                onChange={(event) => setServerUrl(event.target.value)}
+                className="dt-select mt-1.5 w-full dt-mono text-xs"
+              >
+                {DEFAULT_SERVERS.map((server) => <option key={server} value={server}>{server}</option>)}
+                {!DEFAULT_SERVERS.includes(serverUrl) && <option value="">URL tùy chỉnh</option>}
+              </select>
+            </label>
+            <label className="block text-[11px] text-[var(--text-muted)]">
+              Hoặc nhập URL tùy chỉnh:
+              <input
+                value={serverUrl}
+                onChange={(event) => setServerUrl(event.target.value)}
+                placeholder="https://cvat.example.com"
+                className="dt-input mt-1 w-full dt-mono text-xs"
+                autoComplete="url"
+              />
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+              Personal Access Token (đọc và xóa Shape trong Job)
+              <input
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                onBlur={saveCurrentToken}
+                placeholder="Dán token CVAT"
+                type="password"
+                className="dt-input mt-1.5 w-full dt-mono text-xs"
+                autoComplete="off"
+              />
+            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--text-muted)]">
+              <span>PAT được mã hóa theo tài khoản Windows trên thiết bị này; không lưu trong mã nguồn hoặc Vercel.</span>
+              {token && (
+                <span className="dt-mono font-medium text-[var(--status-success-text)]">
+                  Đã nhập: {token.length} ký tự
+                </span>
+              )}
+            </div>
+            {!token && hasDefaultToken && (
+              <p className="text-[11px] font-medium text-[var(--status-warning-text)]">
+                Đang dùng PAT mặc định của bản app. Nhập PAT vào ô trên để ghi đè.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {!desktopAvailable && (
+          <div
+            role="alert"
+            className="flex items-center gap-2 rounded-lg border border-[var(--status-warning-border)] bg-[var(--status-warning-subtle)] px-3 py-2 text-xs font-medium text-[var(--status-warning-text)]"
+          >
+            <ShieldAlert className="h-4 w-4 shrink-0" />
+            <span>Kết nối CVAT chỉ dùng trong app Windows.</span>
+          </div>
+        )}
+
+        {/* Step 2: Task & Job Selector */}
+        <div className="space-y-3 border-t border-[var(--border-subtle)] pt-4">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={handleListTasks}
+              disabled={isLoading || !desktopAvailable}
+              className="dt-btn dt-btn-secondary shrink-0"
+            >
+              {isLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ListChecks className="h-3.5 w-3.5" />}
+              Lấy danh sách Task
+            </button>
+
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+              <span className="w-9 shrink-0">Task</span>
+              {tasks.length > 0 ? (
+                <select
+                  value={taskId}
+                  onChange={(event) => void handleTaskChange(event.target.value)}
+                  disabled={isLoading || !desktopAvailable}
+                  className="dt-select min-w-0 flex-1"
+                >
+                  {tasks.map(task => <option key={task.id} value={task.id}>#{task.id} — {task.name}</option>)}
+                </select>
+              ) : (
+                <input
+                  value={taskId}
+                  onChange={(event) => setTaskId(event.target.value)}
+                  placeholder="Nhập Task ID"
+                  inputMode="numeric"
+                  disabled={isLoading || !desktopAvailable}
+                  className="dt-input min-w-0 flex-1 dt-mono"
+                />
+              )}
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+              <span className="w-9 shrink-0">Job</span>
+              {jobs.length > 0 ? (
+                <select
+                  value={jobId}
+                  onChange={(event) => setJobId(event.target.value)}
+                  disabled={isLoading || !desktopAvailable}
+                  className="dt-select min-w-0 flex-1"
+                >
+                  {jobs.map(job => (
+                    <option key={job.id} value={job.id}>
+                      #{job.id} — Frame {job.start_frame ?? '?'}–{job.stop_frame ?? '?'}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={jobId}
+                  onChange={(event) => setJobId(event.target.value)}
+                  placeholder="Job ID hoặc link Job trên server đang chọn"
+                  inputMode="text"
+                  disabled={isLoading || !desktopAvailable}
+                  className="dt-input min-w-0 flex-1 dt-mono"
+                />
+              )}
+            </label>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleLoad(false)}
+                disabled={isLoading || !desktopAvailable}
+                className="dt-btn dt-btn-primary"
+              >
+                <KeyRound className="h-3.5 w-3.5" /> Mở Job
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleLoad(true)}
+                disabled={isLoading || !desktopAvailable}
+                className="dt-btn dt-btn-secondary"
+              >
+                <CloudDownload className="h-3.5 w-3.5" /> Mở Task
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg border border-[var(--status-danger-border)] bg-[var(--status-danger-subtle)] px-3 py-2 text-xs font-medium text-[var(--status-danger-text)]"
+          >
+            {error}
+          </p>
+        )}
       </div>
-
-      <p className="mt-2 text-[11px] text-slate-500">PAT được mã hóa theo tài khoản Windows trên thiết bị này; không lưu trong mã nguồn hoặc Vercel.</p>
-      {!token && hasDefaultToken && <p className="mt-2 text-[11px] font-medium text-amber-700">Đang dùng PAT mặc định của bản app. Nhập PAT vào ô trên để ghi đè.</p>}
-
-      {!desktopAvailable && <p role="alert" className="mt-3 text-xs font-medium text-amber-700">Kết nối CVAT chỉ dùng trong app Windows.</p>}
-      {isTokenRestoring && <p className="mt-3 text-xs font-medium text-slate-500">Đang khôi phục PAT đã lưu…</p>}
-
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-        <button type="button" onClick={handleListTasks} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-60">
-          {isLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
-          Lấy danh sách Task
-        </button>
-        <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-slate-600">
-          Task
-          {tasks.length > 0 ? (
-            <select value={taskId} onChange={(event) => void handleTaskChange(event.target.value)} disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60">
-              {tasks.map(task => <option key={task.id} value={task.id}>#{task.id} — {task.name}</option>)}
-            </select>
-          ) : (
-            <input value={taskId} onChange={(event) => setTaskId(event.target.value)} placeholder="Nhập Task ID" inputMode="numeric" disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
-          )}
-        </label>
-      </div>
-
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-        <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-slate-600">
-          Job
-          {jobs.length > 0 ? (
-            <select value={jobId} onChange={(event) => setJobId(event.target.value)} disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60">
-              {jobs.map(job => <option key={job.id} value={job.id}>#{job.id} — Frame {job.start_frame ?? '?'}–{job.stop_frame ?? '?'}</option>)}
-            </select>
-          ) : (
-            <input value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="Job ID hoặc link Job trên server đang chọn" inputMode="text" disabled={isLoading || !desktopAvailable} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60" />
-          )}
-        </label>
-        <button type="button" onClick={() => void handleLoad(false)} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-          <KeyRound className="h-4 w-4" /> Mở Job
-        </button>
-        <button type="button" onClick={() => void handleLoad(true)} disabled={isLoading || !desktopAvailable} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-60">
-          <CloudDownload className="h-4 w-4" /> Mở Task
-        </button>
-      </div>
-
-      {error && <p role="alert" className="mt-3 text-xs font-medium text-red-600">{error}</p>}
     </section>
   );
 }

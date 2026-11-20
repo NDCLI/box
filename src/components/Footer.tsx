@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useLocale } from '../i18n/LocaleProvider';
+import type { CVATDataset } from '../types';
 
-function Footer() {
+interface FooterProps {
+  dataset?: CVATDataset | null;
+  totalDuplicates?: number;
+}
+
+function Footer({ dataset, totalDuplicates }: FooterProps) {
   const { locale } = useLocale();
+  const vi = locale === 'vi';
   const [version, setVersion] = useState('—');
 
   useEffect(() => {
@@ -11,11 +18,42 @@ function Footer() {
       .catch(() => {});
   }, []);
 
+  const totalFrames = dataset?.frames.length ?? 0;
+  const totalBoxes = dataset ? dataset.frames.reduce((sum, frame) => sum + frame.boxes.length, 0) : 0;
+
   return (
-    <footer className="app-footer bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-400">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2">
-        <p>&copy; 2026 CVAT Duplicate Bounding Box Auditor.</p>
-        <p className="font-mono text-[10px] text-slate-300">{locale === 'vi' ? 'Phiên bản' : 'Version'} {version}</p>
+    <footer className="app-footer shrink-0 select-none">
+      <div className="flex min-w-0 items-center gap-3 truncate">
+        {dataset ? (
+          <>
+            <span className="dt-mono text-[var(--text-secondary)]">
+              {totalFrames.toLocaleString()} {vi ? 'frame' : 'frames'}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="dt-mono text-[var(--text-secondary)]">
+              {totalBoxes.toLocaleString()} {vi ? 'box' : 'boxes'}
+            </span>
+            {typeof totalDuplicates === 'number' && totalDuplicates > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="dt-mono font-medium text-[var(--status-danger-text)]">
+                  {totalDuplicates.toLocaleString()} {vi ? 'trùng lặp' : 'duplicates'}
+                </span>
+              </>
+            )}
+          </>
+        ) : (
+          <span>CVAT Tools · {vi ? 'Kiểm tra annotation nhanh, trực quan và bảo mật' : 'Fast, visual, and secure annotation checks'}</span>
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="hidden sm:inline dt-mono text-[10px] text-[var(--text-muted)]">
+          Ctrl+B {vi ? 'thanh bên' : 'sidebar'} · Ctrl+1–4 {vi ? 'chuyển tab' : 'switch tools'}
+        </span>
+        <span className="dt-mono text-[10px] text-[var(--text-secondary)]">
+          {vi ? 'Phiên bản' : 'Version'} {version}
+        </span>
       </div>
     </footer>
   );

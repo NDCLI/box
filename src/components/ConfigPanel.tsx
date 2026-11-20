@@ -1,8 +1,5 @@
 import { useState } from 'react';
-import {
-  Settings,
-  X
-} from 'lucide-react';
+import { ChevronDown, ChevronUp, SlidersHorizontal, X } from 'lucide-react';
 import { type DetectionSettings } from '../types';
 import { useLocale } from '../i18n/LocaleProvider';
 
@@ -31,95 +28,102 @@ export default function ConfigPanel({
   skipFrameFilterEnabled,
   onSkipFrameFilterEnabledChange,
   settings,
-  onSettingsChange
+  onSettingsChange,
 }: ConfigPanelProps) {
-  const { t } = useLocale();
-  const [newExcludeLabel, setNewExcludeLabel] = useState("");
+  const { t, locale } = useLocale();
+  const [newExcludeLabel, setNewExcludeLabel] = useState('');
+  const [collapsed, setCollapsed] = useState(false);
+
+  const hasCustomRange =
+    frameRangeStart !== String(frameRange.min) || frameRangeEnd !== String(frameRange.max);
 
   return (
-    <>
-      {/* Global Config: Frame Range & Exclude */}
-      <div className="app-panel bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
-        <div className="flex items-center space-x-2 text-slate-800 pb-3 border-b border-slate-100">
-          <Settings className="w-5 h-5 text-slate-500" />
-          <h3 className="font-bold">Cấu hình Kiểm tra & Loại trừ Box</h3>
-        </div>
+    <section className="dt-panel overflow-hidden">
+      {/* Compact Header with live summary pills */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 bg-[var(--bg-surface-elevated)] border-b border-[var(--border-subtle)]">
+        <button
+          type="button"
+          onClick={() => setCollapsed((prev) => !prev)}
+          aria-expanded={!collapsed}
+          className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-colors"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+          <span>Cấu hình Kiểm tra &amp; Loại trừ Box</span>
+          {collapsed ? <ChevronDown className="h-3.5 w-3.5 text-[var(--text-muted)]" /> : <ChevronUp className="h-3.5 w-3.5 text-[var(--text-muted)]" />}
+        </button>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-          {/* Frame Range Filter */}
-          <div className="space-y-3">
-            <span className="text-xs font-bold text-slate-500 block uppercase tracking-wider">{t(`1. Lọc theo vùng Frame (Giới hạn: ${frameRange.min} - ${frameRange.max})`)}</span>
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <input
-                  type="number"
-                  min={frameRange.min}
-                  max={frameRange.max}
-                  placeholder={`Start: ${frameRange.min}`}
-                  value={frameRangeStart}
-                  onChange={(e) => onFrameRangeStartChange(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:bg-white transition-all font-mono"
-                />
-              </div>
-              <span className="text-slate-400 font-black">&rarr;</span>
-              <div className="flex-1">
-                <input
-                  type="number"
-                  min={frameRange.min}
-                  max={frameRange.max}
-                  placeholder={`End: ${frameRange.max}`}
-                  value={frameRangeEnd}
-                  onChange={(e) => onFrameRangeEndChange(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:bg-white transition-all font-mono"
-                />
-              </div>
-              {(frameRangeStart !== String(frameRange.min) || frameRangeEnd !== String(frameRange.max)) && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="dt-mono rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-0.5 text-[var(--text-secondary)]">
+            Frame {frameRangeStart || frameRange.min}–{frameRangeEnd || frameRange.max}
+          </span>
+          <span className="dt-mono rounded border border-[var(--accent-border)] bg-[var(--accent-subtle)] px-2 py-0.5 text-[var(--accent-text)]">
+            {settings.useIoU
+              ? `IoU ≥ ${settings.overlapThreshold}%`
+              : `Tol ≤ ${settings.tolerancePx.toFixed(1)}px`}
+          </span>
+          <span className="rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-0.5 text-[var(--text-secondary)]">
+            {settings.matchLabelOnly
+              ? (locale === 'vi' ? 'Cùng nhãn' : 'Same label')
+              : (locale === 'vi' ? 'Mọi nhãn' : 'Any label')}
+          </span>
+          {excludeLabels.length > 0 && (
+            <span className="dt-mono rounded border border-[var(--status-danger-border)] bg-[var(--status-danger-subtle)] px-2 py-0.5 text-[var(--status-danger-text)]">
+              Exclude: {excludeLabels.length}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {!collapsed && (
+        <div className="grid grid-cols-1 gap-4 p-3.5 xl:grid-cols-12">
+          {/* Column 1: Frame range & Skip toggle */}
+          <div className="space-y-2.5 xl:col-span-4">
+            <span className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+              {t(`1. Lọc theo vùng Frame (Giới hạn: ${frameRange.min} - ${frameRange.max})`)}
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={frameRange.min}
+                max={frameRange.max}
+                placeholder={`Start: ${frameRange.min}`}
+                value={frameRangeStart}
+                onChange={(e) => onFrameRangeStartChange(e.target.value)}
+                className="dt-input dt-input-sm dt-mono min-w-0 flex-1 font-semibold"
+              />
+              <span className="text-xs font-bold text-[var(--text-muted)]">&rarr;</span>
+              <input
+                type="number"
+                min={frameRange.min}
+                max={frameRange.max}
+                placeholder={`End: ${frameRange.max}`}
+                value={frameRangeEnd}
+                onChange={(e) => onFrameRangeEndChange(e.target.value)}
+                className="dt-input dt-input-sm dt-mono min-w-0 flex-1 font-semibold"
+              />
+              {hasCustomRange && (
                 <button
-                  onClick={() => { onFrameRangeStartChange(String(frameRange.min)); onFrameRangeEndChange(String(frameRange.max)); }}
-                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  type="button"
+                  onClick={() => {
+                    onFrameRangeStartChange(String(frameRange.min));
+                    onFrameRangeEndChange(String(frameRange.max));
+                  }}
+                  className="dt-icon-btn border border-[var(--border-strong)]"
                   title="Xóa bộ lọc vùng frame"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
-          </div>
 
-          {/* Exclude Labels Config */}
-          <div className="space-y-3">
-            <span className="text-xs font-bold text-slate-500 block uppercase tracking-wider">2. Các Nhãn loại trừ khỏi tổng số đếm</span>
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-wrap gap-2 items-center min-h-[46px]">
-              {excludeLabels.map(lbl => (
-                <span key={lbl} className="inline-flex items-center space-x-1 bg-red-100 text-red-700 px-2.5 py-1 rounded-lg text-xs font-bold">
-                  <span>{lbl}</span>
-                  <button onClick={() => onSaveExcludeLabels(excludeLabels.filter(x => x !== lbl))} className="hover:text-red-900"><X className="w-3 h-3" /></button>
-                </span>
-              ))}
-              <div className="flex-1 flex min-w-[150px]">
-                <input
-                  type="text"
-                  placeholder="Nhập tên nhãn (Vd: _corrupt) và Enter..."
-                  value={newExcludeLabel}
-                  onChange={e => setNewExcludeLabel(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && newExcludeLabel.trim()) {
-                      if (!excludeLabels.includes(newExcludeLabel.trim())) {
-                        onSaveExcludeLabels([...excludeLabels, newExcludeLabel.trim()]);
-                      }
-                      setNewExcludeLabel('');
-                    }
-                  }}
-                  className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 text-slate-700 placeholder-slate-400"
-                />
-              </div>
-            </div>
-
-            <div className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left ${skipFrameFilterEnabled
-                ? 'border-red-200 bg-red-50 text-red-700'
-                : 'border-slate-200 bg-slate-50 text-slate-500'
-                }`}
+            <div
+              className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${
+                skipFrameFilterEnabled
+                  ? 'border-[var(--status-danger-border)] bg-[var(--status-danger-subtle)] text-[var(--status-danger-text)]'
+                  : 'border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)]'
+              }`}
             >
-              <span className="block text-xs font-bold">
+              <span className="font-semibold">
                 {skipFrameFilterEnabled ? 'Bỏ qua box trong Frame Skip' : 'Đếm tất cả box'}
               </span>
               <button
@@ -128,64 +132,105 @@ export default function ConfigPanel({
                 aria-checked={skipFrameFilterEnabled}
                 aria-label={skipFrameFilterEnabled ? 'Bỏ qua box trong Frame Skip' : 'Đếm tất cả box'}
                 onClick={() => onSkipFrameFilterEnabledChange(!skipFrameFilterEnabled)}
-                className={`skip-frame-toggle relative h-6 w-11 rounded-full p-0.5 transition-colors ${skipFrameFilterEnabled ? 'is-enabled' : ''}`}
+                className={`relative h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors ${
+                  skipFrameFilterEnabled ? 'bg-[var(--status-danger)]' : 'bg-[var(--border-strong)]'
+                }`}
               >
-                <span className={`skip-frame-toggle-thumb block h-5 w-5 rounded-full shadow-sm transition-transform ${skipFrameFilterEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      {/* Config & Audit Tool Controls */}
-      <div className="app-panel bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
-        <div className="flex items-center space-x-2 text-slate-800 pb-3 border-b border-slate-100">
-          <Settings className="w-5 h-5 text-slate-500" />
-          <h3 className="font-bold">Cấu hình quét trùng lặp (Thử cả 2 tiêu chí để tránh bỏ sót)</h3>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-          {/* Match Mode Selector */}
-          <div className="lg:col-span-4 space-y-3">
-            <span className="text-xs font-bold text-slate-500 block">TIÊU CHÍ SO KHỚP TỌA ĐỘ</span>
-            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
-              <button
-                onClick={() => onSettingsChange({ ...settings, useIoU: true })}
-                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${settings.useIoU
-                  ? 'bg-white text-slate-950 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
+                <span
+                  className={`block h-4 w-4 rounded-full bg-white shadow-xs transition-transform ${
+                    skipFrameFilterEnabled ? 'translate-x-4' : 'translate-x-0'
                   }`}
-              >
-                Chỉ số IoU (Mức chồng đè)
-              </button>
-              <button
-                onClick={() => onSettingsChange({ ...settings, useIoU: false })}
-                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${!settings.useIoU
-                  ? 'bg-white text-slate-950 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-                  }`}
-              >
-                Sai lệch pixel (Cạnh trùng)
+                />
               </button>
             </div>
           </div>
 
-          {/* Sliders for tolerance */}
-          <div className="lg:col-span-5 space-y-3">
+          {/* Column 2: Exclude Labels */}
+          <div className="space-y-2.5 xl:col-span-3">
+            <span className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+              2. Các Nhãn loại trừ khỏi tổng số đếm
+            </span>
+            <div className="flex min-h-[68px] flex-wrap content-start items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-input)] p-2">
+              {excludeLabels.map((lbl) => (
+                <span
+                  key={lbl}
+                  className="inline-flex items-center gap-1 rounded border border-[var(--status-danger-border)] bg-[var(--status-danger-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--status-danger-text)]"
+                >
+                  <span>{lbl}</span>
+                  <button
+                    type="button"
+                    onClick={() => onSaveExcludeLabels(excludeLabels.filter((x) => x !== lbl))}
+                    className="hover:opacity-75"
+                    aria-label={`Remove ${lbl}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                placeholder="Nhập tên nhãn (Vd: _corrupt) và Enter..."
+                value={newExcludeLabel}
+                onChange={(e) => setNewExcludeLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newExcludeLabel.trim()) {
+                    if (!excludeLabels.includes(newExcludeLabel.trim())) {
+                      onSaveExcludeLabels([...excludeLabels, newExcludeLabel.trim()]);
+                    }
+                    setNewExcludeLabel('');
+                  }
+                }}
+                className="min-w-[140px] flex-1 border-none bg-transparent text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Column 3: Duplicate Scan Criteria */}
+          <div className="space-y-2.5 xl:col-span-5 xl:border-l xl:border-[var(--border-subtle)] xl:pl-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                TIÊU CHÍ SO KHỚP TỌA ĐỘ
+              </span>
+              <div className="inline-grid grid-cols-2 gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => onSettingsChange({ ...settings, useIoU: true })}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    settings.useIoU
+                      ? 'bg-[var(--accent-primary)] text-white'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  Chỉ số IoU (Mức chồng đè)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSettingsChange({ ...settings, useIoU: false })}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    !settings.useIoU
+                      ? 'bg-[var(--accent-primary)] text-white'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  Sai lệch pixel (Cạnh trùng)
+                </button>
+              </div>
+            </div>
+
             {!settings.useIoU ? (
-              <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs font-bold text-slate-500">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-medium text-[var(--text-secondary)]">
                     MỨC SAI LỆCH TOẠ ĐỘ CHO PHÉP (PIXEL)
                   </span>
-                  <span className="text-xs font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
-                    {settings.tolerancePx === 0 ? '0.0 px (Trùng khớp 100%)' : `${settings.tolerancePx.toFixed(1)} px`}
+                  <span className="dt-mono rounded border border-[var(--status-danger-border)] bg-[var(--status-danger-subtle)] px-2 py-0.5 font-semibold text-[var(--status-danger-text)]">
+                    {settings.tolerancePx === 0
+                      ? '0.0 px (Trùng khớp 100%)'
+                      : `${settings.tolerancePx.toFixed(1)} px`}
                   </span>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs font-bold text-slate-400">Khớp Tuyệt Đối</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">Khớp Tuyệt Đối</span>
                   <input
                     type="range"
                     min="0"
@@ -193,23 +238,23 @@ export default function ConfigPanel({
                     step="0.5"
                     value={settings.tolerancePx}
                     onChange={(e) => onSettingsChange({ ...settings, tolerancePx: parseFloat(e.target.value) })}
-                    className="flex-1 accent-red-500 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
+                    className="dt-range flex-1"
                   />
-                  <span className="text-xs font-bold text-slate-400">Sai lệch 10px</span>
+                  <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">Sai lệch 10px</span>
                 </div>
               </div>
             ) : (
-              <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs font-bold text-slate-500">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-medium text-[var(--text-secondary)]">
                     HỆ SỐ TRÙNG NHAU TỐI THIỂU (IoU)
                   </span>
-                  <span className="text-xs font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
+                  <span className="dt-mono rounded border border-[var(--status-danger-border)] bg-[var(--status-danger-subtle)] px-2 py-0.5 font-semibold text-[var(--status-danger-text)]">
                     {t(`${settings.overlapThreshold}% trùng nhau`)}
                   </span>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs font-bold text-slate-400">50% Overlap</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">50% Overlap</span>
                   <input
                     type="range"
                     min="50"
@@ -217,35 +262,32 @@ export default function ConfigPanel({
                     step="1"
                     value={settings.overlapThreshold}
                     onChange={(e) => onSettingsChange({ ...settings, overlapThreshold: parseInt(e.target.value, 10) })}
-                    className="flex-1 accent-red-500 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
+                    className="dt-range flex-1"
                   />
-                  <span className="text-xs font-bold text-slate-400">100% </span>
+                  <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">100%</span>
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Match Label Option */}
-          <div className="lg:col-span-3 pt-4 lg:pt-1 space-y-2">
-            <span className="text-xs font-bold text-slate-500 block uppercase tracking-wider">Cài đặt nhãn</span>
-            <label className="flex items-center space-x-3 cursor-pointer group bg-slate-50 p-2.5 rounded-xl border border-slate-150 hover:bg-slate-100/50 transition-colors">
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] px-2.5 py-1.5 hover:bg-[var(--bg-surface-hover)] transition-colors">
               <input
                 type="checkbox"
                 checked={settings.matchLabelOnly}
                 onChange={(e) => onSettingsChange({ ...settings, matchLabelOnly: e.target.checked })}
-                className="w-4.5 h-4.5 accent-red-500 cursor-pointer rounded-sm"
+                className="h-4 w-4 accent-[var(--accent-primary)] cursor-pointer"
               />
-              <div className="text-xs font-semibold text-slate-700">
-                Chỉ tính trùng khi cùng Nhãn (Label)
-                <span className="block font-normal text-slate-400 text-[10px] mt-0.5">
-                  {settings.matchLabelOnly ? 'Cùng toạ độ & cùng nhãn' : 'Trùng toạ độ kể cả khác nhãn'}
+              <div className="min-w-0 text-xs">
+                <span className="font-semibold text-[var(--text-primary)]">
+                  Chỉ tính trùng khi cùng Nhãn (Label)
+                </span>
+                <span className="ml-2 text-[11px] text-[var(--text-muted)]">
+                  — {settings.matchLabelOnly ? 'Cùng toạ độ & cùng nhãn' : 'Trùng toạ độ kể cả khác nhãn'}
                 </span>
               </div>
             </label>
           </div>
-
         </div>
-      </div>
-    </>
+      )}
+    </section>
   );
 }

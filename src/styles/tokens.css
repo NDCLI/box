@@ -1,0 +1,140 @@
+/* ==========================================================================
+   CVAT Tools — Semantic Desktop Design Tokens (Dark & Light)
+   CSS custom properties pierce Shadow DOM automatically, keeping ImageView
+   visually unified with the desktop workbench.
+   ========================================================================== */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Core surfaces */
+  --bg-canvas: #0b0f17;
+  --bg-surface: #121824;
+  --bg-surface-elevated: #171f2e;
+  --bg-surface-hover: #1e283b;
+  --bg-surface-active: #243047;
+  --bg-input: #0d131f;
+  --bg-viewport: #070a10;
+  --bg-overlay: rgba(5, 8, 15, 0.84);
+
+  /* Borders */
+  --border-subtle: #222c3f;
+  --border-strong: #33415c;
+  --border-focus: #3b82f6;
+
+  /* Typography */
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #ffffff;
+
+  /* Brand & interactive accent */
+  --accent-primary: #3b82f6;
+  --accent-primary-hover: #60a5fa;
+  --accent-subtle: rgba(59, 130, 246, 0.14);
+  --accent-border: rgba(59, 130, 246, 0.38);
+  --accent-text: #93c5fd;
+
+  /* Semantic statuses */
+  --status-success: #10b981;
+  --status-success-subtle: rgba(16, 185, 129, 0.14);
+  --status-success-border: rgba(16, 185, 129, 0.34);
+  --status-success-text: #6ee7b7;
+
+  --status-warning: #f59e0b;
+  --status-warning-subtle: rgba(245, 158, 11, 0.14);
+  --status-warning-border: rgba(245, 158, 11, 0.36);
+  --status-warning-text: #fcd34d;
+
+  --status-danger: #f43f5e;
+  --status-danger-hover: #e11d48;
+  --status-danger-subtle: rgba(244, 63, 94, 0.15);
+  --status-danger-border: rgba(244, 63, 94, 0.40);
+  --status-danger-text: #fda4af;
+
+  --status-info: #06b6d4;
+  --status-info-subtle: rgba(6, 182, 212, 0.14);
+  --status-info-border: rgba(6, 182, 212, 0.35);
+  --status-info-text: #67e8f9;
+
+  --status-purple: #a78bfa;
+  --status-purple-subtle: rgba(167, 139, 250, 0.14);
+  --status-purple-border: rgba(167, 139, 250, 0.34);
+
+  /* Elevation & scrollbars */
+  --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-modal: 0 24px 72px rgba(0, 0, 0, 0.62);
+  --scrollbar-track: #0b0f17;
+  --scrollbar-thumb: #2c384f;
+  --scrollbar-thumb-hover: #3f506e;
+
+  /* Font families */
+  --font-sans: 'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', 'SFMono-Regular', Consolas, ui-monospace, monospace;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Core surfaces */
+  --bg-canvas: #f1f5f9;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f8fafc;
+  --bg-surface-hover: #eef2f7;
+  --bg-surface-active: #e2e8f0;
+  --bg-input: #ffffff;
+  --bg-viewport: #0f141e;
+  --bg-overlay: rgba(15, 23, 42, 0.56);
+
+  /* Borders */
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-focus: #2563eb;
+
+  /* Typography */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-inverse: #ffffff;
+
+  /* Brand & interactive accent */
+  --accent-primary: #2563eb;
+  --accent-primary-hover: #1d4ed8;
+  --accent-subtle: rgba(37, 99, 235, 0.09);
+  --accent-border: rgba(37, 99, 235, 0.30);
+  --accent-text: #1d4ed8;
+
+  /* Semantic statuses */
+  --status-success: #059669;
+  --status-success-subtle: rgba(5, 150, 105, 0.10);
+  --status-success-border: rgba(5, 150, 105, 0.28);
+  --status-success-text: #047857;
+
+  --status-warning: #d97706;
+  --status-warning-subtle: rgba(217, 119, 6, 0.10);
+  --status-warning-border: rgba(217, 119, 6, 0.30);
+  --status-warning-text: #b45309;
+
+  --status-danger: #e11d48;
+  --status-danger-hover: #be123c;
+  --status-danger-subtle: rgba(225, 29, 72, 0.09);
+  --status-danger-border: rgba(225, 29, 72, 0.28);
+  --status-danger-text: #be123c;
+
+  --status-info: #0891b2;
+  --status-info-subtle: rgba(8, 145, 178, 0.10);
+  --status-info-border: rgba(8, 145, 178, 0.28);
+  --status-info-text: #0e7490;
+
+  --status-purple: #7c3aed;
+  --status-purple-subtle: rgba(124, 58, 237, 0.10);
+  --status-purple-border: rgba(124, 58, 237, 0.28);
+
+  /* Elevation & scrollbars */
+  --shadow-popover: 0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  --shadow-modal: 0 24px 64px rgba(15, 23, 42, 0.24);
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+}

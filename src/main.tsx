@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { LocaleProvider } from './i18n/LocaleProvider';
+import { ThemeProvider } from './theme/ThemeProvider';
 
 const posthogKey = import.meta.env.VITE_POSTHOG_KEY;
 
@@ -24,6 +25,8 @@ if (posthogKey) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <LocaleProvider><App /></LocaleProvider>
+    <ThemeProvider>
+      <LocaleProvider><App /></LocaleProvider>
+    </ThemeProvider>
   </StrictMode>,
 );
