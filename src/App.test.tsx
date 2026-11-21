@@ -59,15 +59,6 @@ describe('CVAT Job session', () => {
     await click('Mở Job');
   }
 
-  it('opens OD/CPPE on the shared Job and shows an honest empty result', async () => {
-    await openJob();
-    await click('OD/CPPE');
-    expect(container.querySelector('section[aria-label="OD/CPPE"]')).not.toBeNull();
-    expect(container.textContent).toMatch(/Không có bbox Person hợp lệ|No valid person boxes/);
-    expect(container.textContent).not.toContain('1,250');
-    expect(vi.mocked(loadCvatJobDataset)).toHaveBeenCalledTimes(1);
-  });
-
   it('opens data once on Home, then reveals Box, ANPR and ImageView', async () => {
     expect(container.querySelector('.project-sidebar')?.textContent).not.toContain('ImageView');
     expect(container.querySelector('.project-sidebar')?.textContent).not.toContain('ANPR');

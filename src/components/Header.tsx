@@ -10,7 +10,7 @@ const appIconUrl = `${import.meta.env.BASE_URL}app-icon.svg`;
 interface HeaderProps {
   dataset?: CVATDataset | null;
   cvatFrameSource?: CvatFrameSource | null;
-  activeProject?: 'count' | 'anpr' | 'dpm' | 'odcppe' | 'imageview' | 'settings';
+  activeProject?: 'count' | 'anpr' | 'dpm' | 'imageview' | 'settings';
 }
 
 function formatServerHost(serverUrl: string): string {
@@ -31,7 +31,6 @@ function Header({ dataset, cvatFrameSource, activeProject }: HeaderProps) {
     if (activeProject === 'settings') return vi ? 'Cài đặt' : 'Settings';
     if (!dataset) return vi ? 'Nguồn dữ liệu' : 'Data Source';
     if (activeProject === 'anpr') return vi ? 'ANPR biển số' : 'ANPR Plates';
-    if (activeProject === 'odcppe') return 'OD/CPPE';
     if (activeProject === 'dpm') return 'DPM / SSEG';
     if (activeProject === 'imageview') return 'ImageView';
     return vi ? 'Box & Trùng lặp' : 'Box & Duplicates';
